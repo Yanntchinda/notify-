@@ -80,11 +80,16 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     await page.getByRole('button', { name: 'Fermer les notes' }).click();
     trace('étape 9');
     await page.locator('#search').fill('absent');
+    trace('recherche saisie');
     await page.getByText('Aucun résultat').waitFor();
+    trace('aucun résultat affiché');
     await page.locator('#search').clear();
+    trace('recherche effacée');
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Supprimer' }).click();
+    trace('suppression cliquée');
     await page.getByText('Aucun contact pour le moment').waitFor();
+    trace('contact supprimé');
     assert.equal(await page.locator('#contact-count').textContent(), '0');
     await app.close(); app = null;
     console.log('Parcours local Electron : création, doublon, persistance, modification, recherche et suppression OK.');
