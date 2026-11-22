@@ -1,0 +1,74 @@
+name: Desktop prototype checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  database:
+    name: Local Supabase schema (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact upstream wacrm
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ArnasDon/wacrm
+          ref: 6dbeb5bf94d4cf01be351272d0d45b64b1a684d4
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13
+        with:
+          version: 2.113.0
+      - name: Start local database
+        run: supabase db start
+      - name: Replay migrations
+        run: supabase db reset --local --no-seed
+      - name: Verify resulting schema
+        run: supabase db query --local --file supabase/ci/verify-schema.sql
+  windows-build:
+    name: Windows prototype build (not a release)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      # Deliberately non-functional: this is a build check, not a configured app.
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-not-a-supabase-key
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:38741
+      NEXT_PUBLIC_APP_LOCALE: en
+      ELECTRON_BUILDER_DISABLE_PUBLISH: 'true'
+    steps:
+      - name: Check out desktop prototype
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Check out exact upstream wacrm
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ArnasDon/wacrm
+          ref: 6dbeb5bf94d4cf01be351272d0d45b64b1a684d4
+          path: upstream-wacrm
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci --no-audit --no-fund
+      - name: Test desktop configuration
+        working-directory: desktop
+        run: npm test
+      - name: Install wacrm dependencies
+        working-directory: upstream-wacrm
+        run: npm ci --no-audit --no-fund
+      - name: Build wacrm for Windows
+        working-directory: upstream-wacrm
+        run: npm run build
+      - name: Prepare standalone bundle
+        run: node desktop/scripts/prepare-bundle.cjs upstream-wacrm
+      - name: Build experimental installer (no publish)
+        working-directory: desktop
+        run: npm run dist:win -- --publish never
+      # Deliberately do not publish a downloadable installer yet: it uses a
+      # dummy key and does not install or start local Supabase.
