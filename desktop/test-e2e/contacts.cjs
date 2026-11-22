@@ -19,8 +19,7 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
   };
   try {
     trace('étape 0');
-    let trace('étape 4');
-    page = await launch();
+    let page = await launch();
     await page.getByRole('button', { name: 'Nouveau contact' }).click();
     await page.locator('#name').fill('Alice');
     await page.locator('#phone').fill('+237600000000');
@@ -55,6 +54,7 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     trace('étape 3');
     await app.close(); app = null;
 
+    trace('étape 4');
     page = await launch();
     await page.getByText('Alice', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Notes', exact: true }).click();
