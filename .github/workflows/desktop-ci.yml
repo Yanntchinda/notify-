@@ -46,3 +46,11 @@ jobs:
           path: desktop/dist/*.exe
           if-no-files-found: error
           retention-days: 7
+      - name: Report end-to-end diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          if (Test-Path desktop/e2e-trace.txt) {
+            $text = (Get-Content desktop/e2e-trace.txt -Raw).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Output "::error title=Electron diagnostic::$text"
+          } else { Write-Output '::error title=Electron diagnostic::No trace file found' }

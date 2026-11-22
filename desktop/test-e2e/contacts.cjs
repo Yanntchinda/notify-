@@ -4,6 +4,9 @@ const { mkdtemp, rm } = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const traceFile = path.join(__dirname, '..', 'e2e-trace.txt');
+const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(traceFile, `${message}\n`); };
 
 (async () => {
   const profile = await mkdtemp(path.join(os.tmpdir(), 'wacrm-e2e-'));
@@ -15,19 +18,24 @@ const assert = require('node:assert/strict');
     return page;
   };
   try {
-    let page = await launch();
+    trace('étape 0');
+    let trace('étape 4');
+    page = await launch();
     await page.getByRole('button', { name: 'Nouveau contact' }).click();
     await page.locator('#name').fill('Alice');
     await page.locator('#phone').fill('+237600000000');
     await page.locator('#email').fill('alice@example.test');
     await page.getByRole('button', { name: 'Enregistrer' }).click();
     await page.getByText('Alice', { exact: true }).waitFor();
+    trace('étape 1');
     await page.getByRole('button', { name: 'Notes', exact: true }).click();
     await page.locator('#note-content').fill('Appel prévu demain');
     await page.getByRole('button', { name: 'Ajouter la note' }).click();
     await page.getByText('Appel prévu demain').waitFor();
     await page.getByRole('button', { name: 'Fermer les notes' }).click();
+    trace('étape 2');
     const backup = path.join(profile, 'sauvegarde.sqlite');
+    trace('étape 5');
     await app.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }); }, backup);
     await page.getByRole('button', { name: 'Sauvegarder', exact: true }).click();
     await page.getByText(/Sauvegarde créée/).waitFor();
@@ -44,6 +52,7 @@ const assert = require('node:assert/strict');
     await page.getByRole('button', { name: 'Enregistrer' }).click();
     await page.getByText('Ce numéro existe déjà dans les contacts.').waitFor();
     await page.getByRole('button', { name: 'Annuler' }).click();
+    trace('étape 3');
     await app.close(); app = null;
 
     page = await launch();
@@ -59,13 +68,17 @@ const assert = require('node:assert/strict');
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] });
       dialog.showMessageBox = async () => ({ response: 1 });
     }, backup);
+    trace('étape 6');
     await page.getByRole('button', { name: 'Restaurer', exact: true }).click();
+    trace('étape 7');
     await page.locator('#backup-status:not([hidden])').waitFor();
+    trace('étape 8');
     assert.match(await page.locator('#backup-status').textContent(), /Sauvegarde restaurée/);
     await page.getByText('Alice', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Notes', exact: true }).click();
     await page.getByText('Appel prévu demain').waitFor();
     await page.getByRole('button', { name: 'Fermer les notes' }).click();
+    trace('étape 9');
     await page.locator('#search').fill('absent');
     await page.getByText('Aucun résultat').waitFor();
     await page.locator('#search').clear();
@@ -80,6 +93,7 @@ const assert = require('node:assert/strict');
     await rm(profile, { recursive: true, force: true });
   }
 })().catch((error) => {
+  trace(String(error.stack || error));
   console.error(error);
   if (process.env.GITHUB_ACTIONS) {
     const message = String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
