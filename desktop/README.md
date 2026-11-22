@@ -1,66 +1,50 @@
-# wacrm Local — socle expérimental
+# wacrm Local — prototype expérimental sans Docker
 
-**État : non terminé, pas un programme installable prêt à utiliser.** Cette
-première étape conserve l'interface wacrm et fournit une enveloppe Electron
-pour Windows. Elle ne remplace pas Supabase, ne lance pas une base locale,
-ne configure pas l'utilisateur initial et n'établit aucun tunnel Meta.
-Le CRM n'a pas été testé de bout en bout sur Windows.
+**État : non terminé, pas un programme prêt à utiliser.** Le but est de
+conserver autant que possible l'interface de wacrm dans une application Windows
+avec ses données sur l'ordinateur, sans Docker ni Supabase en ligne.
 
-wacrm dépend de Postgres, Auth, Storage et Realtime de Supabase. La piste
-la moins invasive à évaluer est un Supabase local compatible et les migrations
-existantes ; une simple base SQLite ne suffit pas sans réécriture importante.
-Ce dépôt n'embarque pas encore ces services. L'utilisation d'un Supabase local
-de développement peut nécessiter Docker Desktop et une installation initiale
-avec accès Internet. Cela n'a pas été validé ici.
+## Travail réalisé
 
-## Fonctionnement prévu du socle
+- Une enveloppe Electron expérimentale, destinée à exécuter l'interface.
+- Un premier module SQLite local (`src/local-store.cjs`) avec création, lecture,
+  modification et suppression de contacts. Des tests vérifient la persistance
+  après fermeture, les données invalides et la protection contre une version de
+  schéma plus récente. Ce fichier SQLite n'est pas chiffré.
+- Une vérification GitHub Actions pour Windows : tests Node et Electron puis
+  compilation du prototype de l'interface.
 
-- Une seule instance démarre un serveur Next.js sur `127.0.0.1:38741`, puis
-  affiche son interface dans une fenêtre isolée Electron. Le port doit être libre.
-- Le serveur et le navigateur ciblent uniquement Supabase local sur
-  `http://127.0.0.1:54321`. L'URL et la clé publique doivent aussi être intégrées
-  lors de la compilation Next.js (les variables `NEXT_PUBLIC_*` sont figées à
-  la compilation). Le manifeste `desktop-build.json` dans le bundle doit contenir
-  `supabaseUrl` et `anonKey` correspondant à la configuration ci-dessous.
-- Le programme attend `server.js` et les fichiers de la sortie Next standalone,
-  construits **sur Windows** et placés dans `desktop/resources/standalone/`.
-  Les modules natifs construits sur Linux ne doivent pas être copiés vers Windows.
-- Les secrets ne sont pas inclus dans le paquet. La configuration est attendue
-  dans `local-config.json` du dossier utilisateur Electron, avec les champs
-  `supabaseUrl`, `anonKey`, `serviceRoleKey` et `encryptionKey` (64 caractères
-  hexadécimaux). **Protéger ce fichier : il contient une clé privilégiée.**
-  Une interface de configuration et un stockage protégé restent à développer.
-- L'envoi et la réception WhatsApp nécessiteront Internet et la configuration
-  officielle Meta ; la réception exige un webhook HTTPS public sécurisé. Ne
-  jamais exposer la base, les endpoints d'administration ou le CRM entier sur
-  Internet par défaut. Le tunnel n'est pas implémenté.
+## Important : l'interface n'est pas encore branchée sur SQLite
+
+Le module SQLite est un début, pas un remplacement de Supabase. L'interface
+wacrm existante utilise encore Supabase pour la connexion, les requêtes, le
+stockage et le temps réel. Le lancement du prototype demande toujours une
+configuration Supabase locale ; **il ne répond donc pas encore à l'objectif
+sans Docker**. Aucune configuration fictive ne doit être prise pour une
+application fonctionnelle. La compilation CI utilise une clé de test et ne
+publie pas de programme à utiliser.
+
+## À faire
+
+1. Relier progressivement l'interface au stockage SQLite et remplacer les
+   fonctions Supabase nécessaires (authentification locale, données, fichiers et
+   actualisation de l'interface). Les migrations Postgres ne sont pas directement
+   compatibles SQLite ; il faut porter et tester les fonctionnalités une par une.
+2. Implémenter les conversations et messages, protéger les secrets, prévoir la
+   sauvegarde et la restauration et garantir la conservation des données lors
+   des mises à jour. Prévoir aussi l'emplacement du fichier dans le dossier de
+   données utilisateur, pas dans le dossier d'installation.
+3. Construire un installateur réellement autonome et valider les parcours sur
+   un PC Windows, sans Docker ni service Supabase distant.
+4. Après validation, configurer l'API Meta et un webhook HTTPS public sécurisé.
+   WhatsApp nécessite Internet ; aucun tunnel ni secret Meta n'est fourni ici.
 
 ## Développement
 
-Dans `desktop/`, `npm install` puis `npm test`. `npm start` lance Electron,
-mais signalera l'absence de configuration et/ou de bundle tant que l'étape
-Supabase local et la compilation Windows ne sont pas achevées. `npm run
- dist:win` est prévu pour créer un installateur Windows après préparation du
-bundle, sans garantie de fonctionnement à ce stade. Les dépendances doivent
-être installées et le build testé sur Windows avant livraison.
+Dans `desktop/` : `npm ci` puis `npm test`. SQLite utilise l'API `node:sqlite`
+intégrée à Node (v22.13 ou plus) et à la version Electron ciblée ; aucun module
+SQLite externe ni conteneur n'est requis. Les tests peuvent afficher un
+avertissement de fonctionnalité expérimentale selon la version de Node.
 
-## À faire avant toute livraison
-
-1. Mettre en place Supabase entièrement local, appliquer et vérifier les 58
-   migrations, configurer Auth et le premier compte, Storage et Realtime.
-2. Construire wacrm sous Windows avec les valeurs locales, fournir un script de
-   préparation du bundle et valider tous les parcours CRM utiles.
-3. Prévoir l'installation, le démarrage/arrêt et la sauvegarde des données
-   locales, ainsi que la protection des clés. Éviter toute réinitialisation
-   destructive lors des mises à jour.
-4. Valider un installateur `.exe` sur Windows, puis traiter Meta et le webhook.
-
-## Vérifications GitHub Actions
-
-Le workflow `.github/workflows/desktop-ci.yml` récupère la révision wacrm
-`6dbeb5b` sans modifier la version locale. Il tente de rejouer les migrations
-sur Linux avec Supabase, et de construire le prototype sous Windows. La clé
-utilisée pour la compilation Windows est une fausse clé de test : **le fichier
-produit par cette vérification ne constitue pas une application fonctionnelle**
-et n'est pas publié. Les tests ne remplacent pas une validation interactive
-Windows ni l'installation des services Supabase locaux.
+L'ancien socle de compilation Next/Electron et son installateur ne sont qu'une
+preuve technique : ils doivent encore être adaptés pour utiliser SQLite.

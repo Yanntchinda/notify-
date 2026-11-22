@@ -9,26 +9,6 @@ concurrency:
   group: desktop-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  database:
-    name: Local Supabase schema (Linux)
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    steps:
-      - name: Check out exact upstream wacrm
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: ArnasDon/wacrm
-          ref: 6dbeb5bf94d4cf01be351272d0d45b64b1a684d4
-      - name: Install Supabase CLI
-        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13
-        with:
-          version: 2.113.0
-      - name: Start local database
-        run: supabase db start
-      - name: Replay migrations
-        run: supabase db reset --local --no-seed
-      - name: Verify resulting schema
-        run: supabase db query --local --file supabase/ci/verify-schema.sql
   windows-build:
     name: Windows prototype build (not a release)
     runs-on: windows-latest
@@ -56,9 +36,16 @@ jobs:
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci --no-audit --no-fund
-      - name: Test desktop configuration
+      - name: Test local SQLite storage under Node
         working-directory: desktop
         run: npm test
+      - name: Test local SQLite storage under the bundled Electron runtime
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          & .\node_modules\.bin\electron.cmd --test test/config.test.cjs test/local-store.test.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install wacrm dependencies
         working-directory: upstream-wacrm
         run: npm ci --no-audit --no-fund
