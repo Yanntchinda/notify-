@@ -55,6 +55,16 @@ const assert = require('node:assert/strict');
     await page.locator('#name').fill('Alice modifiée');
     await page.getByRole('button', { name: 'Enregistrer' }).click();
     await page.getByText('Alice modifiée', { exact: true }).waitFor();
+    await app.evaluate(({ dialog }, filePath) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] });
+      dialog.showMessageBox = async () => ({ response: 1 });
+    }, backup);
+    await page.getByRole('button', { name: 'Restaurer', exact: true }).click();
+    await page.getByText(/Sauvegarde restaurée/).waitFor();
+    await page.getByText('Alice', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Notes', exact: true }).click();
+    await page.getByText('Appel prévu demain').waitFor();
+    await page.getByRole('button', { name: 'Fermer les notes' }).click();
     await page.locator('#search').fill('absent');
     await page.getByText('Aucun résultat').waitFor();
     await page.locator('#search').clear();

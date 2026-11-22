@@ -34,6 +34,22 @@ function registerHandlers() {
       store.exportBackup(result.filePath);
       return true;
     },
+    'backup:restore': async () => {
+      const choice = await dialog.showOpenDialog(window, {
+        title: 'Choisir une sauvegarde locale', properties: ['openFile'],
+        filters: [{ name: 'Sauvegarde SQLite', extensions: ['sqlite'] }],
+      });
+      if (choice.canceled || choice.filePaths.length !== 1) return false;
+      const confirmation = await dialog.showMessageBox(window, {
+        type: 'warning', buttons: ['Annuler', 'Restaurer'], defaultId: 0, cancelId: 0,
+        title: 'Confirmer la restauration',
+        message: 'Les contacts et notes actuels seront remplacés.',
+        detail: 'Une copie de sécurité automatique sera conservée sur ce PC avant la restauration. Les fichiers ne sont pas chiffrés.',
+      });
+      if (confirmation.response !== 1) return false;
+      store.restoreBackup(choice.filePaths[0]);
+      return true;
+    },
   };
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.handle(channel, async (event, ...args) => {
@@ -45,6 +61,7 @@ function registerHandlers() {
         // Never expose filesystem locations or raw database errors to the renderer.
         if (error instanceof TypeError) throw new Error(error.message);
         if (error.code === 'EEXIST') throw new Error('Ce fichier existe déjà. Choisissez un nouveau nom.');
+        if (channel === 'backup:restore') throw new Error('Restauration impossible. Vérifiez que la sauvegarde est compatible et non endommagée. Les données actuelles ont été conservées.');
         if (String(error.message).includes('UNIQUE constraint failed: contacts.phone')) {
           throw new Error('Ce numéro existe déjà dans les contacts.');
         }

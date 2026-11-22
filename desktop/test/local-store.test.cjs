@@ -113,3 +113,66 @@ test('backup is a consistent database and never replaces an existing file', (t) 
     assert.equal(store.getContact(contact.id).name, 'Client');
   } finally { store.close(); }
 });
+
+test('restore validates and replaces contacts and notes, keeping an automatic safety copy', (t) => {
+  const file = tempStore(t);
+  const backup = path.join(path.dirname(file), 'backup.sqlite');
+  const store = openLocalStore(file);
+  try {
+    const before = store.createContact({ phone: '+11', name: 'À restaurer' });
+    store.addNote(before.id, 'Note sauvegardée');
+    store.exportBackup(backup);
+    store.updateContact(before.id, { phone: '+11', name: 'Modifié' });
+    store.addNote(before.id, 'Ajout après sauvegarde');
+    store.createContact({ phone: '+22', name: 'Autre contact' });
+    const result = store.restoreBackup(backup);
+    assert.equal(result.contactCount, 1);
+    assert.equal(store.getContact(before.id).name, 'À restaurer');
+    assert.equal(store.listNotes(before.id).length, 1);
+    const safety = openLocalStore(result.safetyPath);
+    try {
+      assert.equal(safety.getContact(before.id).name, 'Modifié');
+      assert.equal(safety.listNotes(before.id).length, 2);
+      assert.equal(safety.listContacts().length, 2);
+    } finally { safety.close(); }
+  } finally { store.close(); }
+  const reopened = openLocalStore(file);
+  assert.equal(reopened.listContacts()[0].name, 'À restaurer');
+  reopened.close();
+});
+
+test('restore rejects corrupted and incompatible backups without replacing data', (t) => {
+  const { writeFileSync } = require('node:fs');
+  const file = tempStore(t);
+  const store = openLocalStore(file);
+  try {
+    const c = store.createContact({ phone: '+1', name: 'À conserver' });
+    const bad = path.join(path.dirname(file), 'bad.sqlite');
+    writeFileSync(bad, 'ceci ne représente pas une sauvegarde SQLite');
+    assert.throws(() => store.restoreBackup(bad));
+    assert.equal(store.getContact(c.id).name, 'À conserver');
+    const newVersion = path.join(path.dirname(file), 'new.sqlite');
+    store.exportBackup(newVersion);
+    const db = new DatabaseSync(newVersion);
+    db.exec(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`); db.close();
+    assert.throws(() => store.restoreBackup(newVersion));
+    assert.equal(store.listContacts().length, 1);
+  } finally { store.close(); }
+});
+
+test('restore rolls back fully if backup violates relationships', (t) => {
+  const file = tempStore(t);
+  const store = openLocalStore(file);
+  try {
+    const c = store.createContact({ phone: '+1', name: 'Avant restauration' });
+    const bad = path.join(path.dirname(file), 'bad-relations.sqlite');
+    store.exportBackup(bad);
+    const altered = new DatabaseSync(bad);
+    altered.exec("PRAGMA foreign_keys=OFF; INSERT INTO contact_notes VALUES ('orphan', 'missing', 'Note', '2026');");
+    altered.close();
+    assert.throws(() => store.restoreBackup(bad));
+    assert.equal(store.getContact(c.id).name, 'Avant restauration');
+    assert.equal(store.listContacts().length, 1);
+    assert.equal(store.listNotes(c.id).length, 0);
+  } finally { store.close(); }
+});

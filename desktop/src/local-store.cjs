@@ -4,7 +4,7 @@
 // compatibility layer; the current wacrm UI is not wired to it yet.
 const { DatabaseSync } = require('node:sqlite');
 const { randomUUID } = require('node:crypto');
-const { mkdirSync, openSync, closeSync, unlinkSync } = require('node:fs');
+const { mkdirSync, openSync, closeSync, unlinkSync, statSync } = require('node:fs');
 const path = require('node:path');
 
 const SCHEMA_VERSION = 2;
@@ -19,6 +19,39 @@ function optionalText(value, label, max) {
   if (value === undefined || value === null || value === '') return null;
   if (typeof value !== 'string' || value.trim().length > max) throw new TypeError(`${label} invalide.`);
   return value.trim() || null;
+}
+
+// Read only the schema versions produced by this prototype. Never execute SQL
+// from a backup, and bound its size/record count before putting it in memory.
+function readBackup(filename) {
+  if (typeof filename !== 'string' || !filename.trim()) throw new TypeError('Chemin de sauvegarde invalide.');
+  const stat = statSync(filename);
+  if (!stat.isFile() || stat.size > 64 * 1024 * 1024) throw new Error('Fichier de sauvegarde invalide ou trop volumineux.');
+  const source = new DatabaseSync(filename, { readOnly: true });
+  try {
+    source.exec('PRAGMA query_only = ON; PRAGMA trusted_schema = OFF;');
+    if (source.prepare('PRAGMA quick_check(1)').get().quick_check !== 'ok') throw new Error('Sauvegarde endommagée.');
+    const version = source.prepare('PRAGMA user_version').get().user_version;
+    if (version !== 1 && version !== 2) throw new Error('Version de sauvegarde incompatible.');
+    const tables = source.prepare("SELECT name, type FROM sqlite_schema WHERE name IN ('contacts', 'contact_notes')").all();
+    if (!tables.some((t) => t.name === 'contacts' && t.type === 'table') ||
+        (version === 2 && !tables.some((t) => t.name === 'contact_notes' && t.type === 'table'))) {
+      throw new Error('Sauvegarde incompatible.');
+    }
+    const contacts = source.prepare('SELECT id, phone, name, email, company, created_at, updated_at FROM contacts LIMIT 100001').all();
+    const notes = version === 2 ? source.prepare('SELECT id, contact_id, content, created_at FROM contact_notes LIMIT 200001').all() : [];
+    if (contacts.length > 100000 || notes.length > 200000) throw new Error('Sauvegarde trop volumineuse.');
+    for (const c of contacts) {
+      requiredText(c.id, 'Identifiant', 64); requiredText(c.phone, 'Téléphone', 64);
+      optionalText(c.name, 'Nom', 200); optionalText(c.email, 'Adresse e-mail', 320); optionalText(c.company, 'Entreprise', 200);
+      requiredText(c.created_at, 'Date', 64); requiredText(c.updated_at, 'Date', 64);
+    }
+    for (const n of notes) {
+      requiredText(n.id, 'Identifiant', 64); requiredText(n.contact_id, 'Identifiant du contact', 64);
+      requiredText(n.content, 'Note', 10000); requiredText(n.created_at, 'Date', 64);
+    }
+    return { contacts, notes };
+  } finally { source.close(); }
 }
 
 function openLocalStore(filename) {
@@ -106,6 +139,26 @@ function openLocalStore(filename) {
         closeSync(fd);
         try { db.prepare('VACUUM INTO ?').run(dest); }
         catch (error) { try { unlinkSync(dest); } catch {} throw error; }
+      },
+      restoreBackup(sourcePath) {
+        // Validate before touching the current database, then always keep a
+        // private safety copy. An import failure is rolled back atomically.
+        const backup = readBackup(sourcePath);
+        const safetyDir = path.join(path.dirname(absolutePath), 'backups');
+        mkdirSync(safetyDir, { recursive: true, mode: 0o700 });
+        const safetyPath = path.join(safetyDir, `avant-restauration-${randomUUID()}.sqlite`);
+        this.exportBackup(safetyPath);
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          db.exec('DELETE FROM contacts');
+          for (const c of backup.contacts) insert.run(c.id, c.phone, c.name, c.email, c.company, c.created_at, c.updated_at);
+          for (const n of backup.notes) insertNote.run(n.id, n.contact_id, n.content, n.created_at);
+          db.exec('COMMIT');
+        } catch (error) {
+          try { db.exec('ROLLBACK'); } catch {}
+          throw error;
+        }
+        return { contactCount: backup.contacts.length, safetyPath };
       },
       close() { db.close(); },
     };

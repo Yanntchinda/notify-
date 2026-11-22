@@ -13,6 +13,7 @@ function safeError(error) {
   if (text.includes('Téléphone doit contenir')) return 'Indiquez un numéro de téléphone.';
   if (text.includes('Note doit contenir')) return 'Saisissez une note.';
   if (text.includes('Ce fichier existe déjà')) return 'Ce fichier existe déjà. Choisissez un nouveau nom.';
+  if (text.includes('Restauration impossible')) return 'Restauration impossible. Vérifiez le fichier : les données actuelles ont été conservées.';
   return 'Une erreur est survenue. Veuillez réessayer.';
 }
 function cell(row, value) { const element = document.createElement('td'); element.textContent = value || '—'; row.append(element); }
@@ -102,6 +103,15 @@ $('backup').addEventListener('click', async () => {
   try { if (await window.localContacts.exportBackup()) { status.textContent = 'Sauvegarde créée. Elle contient vos contacts et notes et n’est pas chiffrée.'; status.hidden = false; } }
   catch (error) { status.textContent = safeError(error); status.hidden = false; }
   finally { $('backup').disabled = false; }
+});
+$('restore').addEventListener('click', async () => {
+  const status = $('backup-status'); status.hidden = true; $('restore').disabled = true; $('backup').disabled = true;
+  try {
+    if (await window.localContacts.restoreBackup()) {
+      await refresh(); status.textContent = 'Sauvegarde restaurée. Une copie automatique des données précédentes est conservée sur ce PC.'; status.hidden = false;
+    }
+  } catch (error) { status.textContent = safeError(error); status.hidden = false; }
+  finally { $('restore').disabled = false; $('backup').disabled = false; }
 });
 $('new-contact').addEventListener('click', () => openForm());
 $('empty-add').addEventListener('click', () => openForm());
