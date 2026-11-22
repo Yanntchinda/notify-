@@ -78,4 +78,11 @@ const assert = require('node:assert/strict');
     if (app) await app.close();
     await rm(profile, { recursive: true, force: true });
   }
-})().catch((error) => { console.error(error); process.exitCode = 1; });
+})().catch((error) => {
+  console.error(error);
+  if (process.env.GITHUB_ACTIONS) {
+    const message = String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+    console.error(`::error title=Electron E2E::${message}`);
+  }
+  process.exitCode = 1;
+});
