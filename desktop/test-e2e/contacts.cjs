@@ -27,7 +27,7 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     await page.getByRole('button', { name: 'Enregistrer' }).click();
     await page.locator('#contacts').getByText('Alice', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Conversation', exact: true }).click();
-    await page.getByText('WhatsApp n’est pas connecté').waitFor();
+    await page.locator('#inbox-view').getByText('WhatsApp n’est pas connecté', { exact: true }).waitFor();
     await page.locator('#draft').fill('Réponse en attente de connexion');
     page.once('dialog', async (confirm) => { await confirm.dismiss(); });
     await page.locator('#nav-contacts').click();
