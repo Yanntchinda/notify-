@@ -66,7 +66,8 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     await page.getByText('Alice modifiée', { exact: true }).waitFor();
     await app.evaluate(({ dialog }, filePath) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] });
-      dialog.showMessageBox = async () => ({ response: 1 });
+      const originalMessageBox = dialog.showMessageBox;
+      dialog.showMessageBox = async () => { dialog.showMessageBox = originalMessageBox; return { response: 1 }; };
     }, backup);
     trace('étape 6');
     await page.getByRole('button', { name: 'Restaurer', exact: true }).click();
