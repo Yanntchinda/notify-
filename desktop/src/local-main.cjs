@@ -24,6 +24,10 @@ function registerHandlers() {
     'notes:list': (_, id) => store.listNotes(id).map(plain),
     'notes:add': (_, id, text) => plain(store.addNote(id, text)),
     'notes:delete': (_, contactId, noteId) => store.deleteNote(contactId, noteId),
+    'conversations:list': () => store.listConversations().map(plain),
+    'conversations:open': (_, contactId) => plain(store.openConversation(contactId)),
+    'conversations:draft': (_, id, text) => plain(store.saveDraft(id, text)),
+    'conversations:status': (_, id, status) => plain(store.setConversationStatus(id, status)),
     'backup:export': async () => {
       const result = await dialog.showSaveDialog(window, {
         title: 'Enregistrer une sauvegarde locale',
@@ -43,7 +47,7 @@ function registerHandlers() {
       const confirmation = await dialog.showMessageBox(window, {
         type: 'warning', buttons: ['Annuler', 'Restaurer'], defaultId: 0, cancelId: 0,
         title: 'Confirmer la restauration',
-        message: 'Les contacts et notes actuels seront remplacés.',
+        message: 'Les contacts, notes et brouillons actuels seront remplacés.',
         detail: 'Une copie de sécurité automatique sera conservée sur ce PC avant la restauration. Les fichiers ne sont pas chiffrés.',
       });
       if (confirmation.response !== 1) return false;

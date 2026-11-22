@@ -11,4 +11,8 @@ contextBridge.exposeInMainWorld('localContacts', Object.freeze({
   removeNote: (id, noteId) => ipcRenderer.invoke('notes:delete', id, noteId),
   exportBackup: () => ipcRenderer.invoke('backup:export'),
   restoreBackup: () => ipcRenderer.invoke('backup:restore'),
+  listConversations: () => ipcRenderer.invoke('conversations:list'),
+  openConversation: (contactId) => ipcRenderer.invoke('conversations:open', contactId),
+  saveDraft: (id, text) => ipcRenderer.invoke('conversations:draft', id, text),
+  setConversationStatus: (id, status) => ipcRenderer.invoke('conversations:status', id, status),
 }));

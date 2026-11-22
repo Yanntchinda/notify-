@@ -14,12 +14,12 @@
       <div class="brand"><span class="brand-mark">w</span><span>wacrm <small>LOCAL</small></span></div>
       <div class="workspace"><div class="workspace-icon">W</div><div><strong>Mon espace</strong><span>Stockage sur cet appareil</span></div></div>
       <div class="nav-caption">ESPACE DE TRAVAIL</div>
-      <nav aria-label="Navigation principale"><div class="nav-selected"><span>◉</span> Contacts</div><div class="nav-disabled"><span>▤</span> Boîte de réception <small>À venir</small></div><div class="nav-disabled"><span>▦</span> Tableau de bord <small>À venir</small></div><div class="nav-disabled"><span>⚙</span> Paramètres <small>À venir</small></div></nav>
+      <nav aria-label="Navigation principale"><button id="nav-contacts" class="nav-link nav-selected" type="button" aria-current="page"><span>◉</span> Contacts</button><button id="nav-inbox" class="nav-link" type="button"><span>▤</span> Boîte de réception</button><div class="nav-disabled"><span>▦</span> Tableau de bord <small>À venir</small></div><div class="nav-disabled"><span>⚙</span> Paramètres <small>À venir</small></div></nav>
       <div class="sidebar-footer"><span class="status-dot"></span><div><strong>Mode local</strong><p>Vos contacts restent sur ce PC.</p></div></div>
     </aside>
     <main class="main">
-      <header class="topbar"><span>Mon espace <span class="divider">/</span> <strong>Contacts</strong></span><span class="prototype">PROTOTYPE LOCAL</span></header>
-      <div class="content">
+      <header class="topbar"><span>Mon espace <span class="divider">/</span> <strong id="page-title">Contacts</strong></span><span class="prototype">PROTOTYPE LOCAL</span></header>
+      <div class="content" id="contacts-view">
         <div class="page-heading"><div><div class="eyebrow">VOTRE RÉPERTOIRE</div><h1>Contacts</h1><p>Retrouvez et gérez vos contacts au même endroit.</p></div><div class="heading-actions"><button class="button secondary" id="restore" type="button">Restaurer</button><button class="button secondary" id="backup" type="button">Sauvegarder</button><button class="button primary" id="new-contact" type="button">+ <span>Nouveau contact</span></button></div></div>
         <div class="notice"><span class="notice-icon">i</span><div><strong>Version locale en cours de développement</strong><p>Les contacts sont enregistrés sur cet ordinateur. WhatsApp et les autres fonctions seront ajoutés plus tard.</p></div></div>
         <section class="card" aria-label="Liste des contacts">
@@ -30,6 +30,21 @@
         </section>
         <p id="backup-status" class="backup-status" role="status" hidden></p>
         <p class="privacy">◈ Les données et sauvegardes ne sont pas chiffrées. Protégez votre session Windows et conservez vos sauvegardes en lieu sûr.</p>
+      </div>
+      <div class="content" id="inbox-view" hidden>
+        <div class="page-heading"><div><div class="eyebrow">SUIVI CLIENT</div><h1>Boîte de réception</h1><p>Préparez vos réponses et suivez vos échanges.</p></div></div>
+        <div class="notice"><span class="notice-icon">i</span><div><strong>WhatsApp n’est pas connecté</strong><p>Les brouillons restent sur ce PC. Aucun message n’est envoyé ni reçu pour le moment.</p></div></div>
+        <div class="inbox-layout card">
+          <section class="conversation-list" aria-label="Conversations"><div class="inbox-list-header"><h2>Conversations</h2><p>Depuis vos contacts</p></div><div id="conversation-list"></div><p class="inbox-empty" id="no-conversations">Aucune conversation. Depuis Contacts, cliquez sur Conversation.</p></section>
+          <section class="conversation-panel" aria-label="Détail de conversation">
+            <div class="conversation-placeholder" id="conversation-placeholder"><div class="empty-icon">▤</div><h3>Sélectionnez une conversation</h3><p>Vos brouillons apparaîtront ici.</p></div>
+            <div id="conversation-detail" hidden><header class="conversation-header"><div><h2 id="conversation-name"></h2><p id="conversation-phone"></p></div><button id="conversation-status" class="button secondary" type="button">Clore</button></header>
+              <div class="conversation-body"><div class="conversation-explainer"><strong>Aucun message WhatsApp connecté</strong><p>Après la connexion à l’API Meta, l’envoi et la réception pourront être intégrés. Les messages n’apparaissent pas encore ici.</p></div></div>
+              <form id="draft-form" class="draft-form"><label for="draft">Brouillon local <span id="draft-dirty" hidden>· non enregistré</span></label><textarea id="draft" maxlength="10000" rows="4" placeholder="Rédigez une réponse à conserver sur cet appareil…"></textarea><div class="draft-bottom"><span id="draft-feedback" role="status">Ce texte n’est pas envoyé.</span><button id="save-draft" class="button primary" type="submit">Enregistrer le brouillon</button></div></form>
+            </div>
+            <p class="error" id="inbox-error" role="alert" hidden></p>
+          </section>
+        </div>
       </div>
     </main>
   </div>

@@ -26,6 +26,14 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     await page.locator('#email').fill('alice@example.test');
     await page.getByRole('button', { name: 'Enregistrer' }).click();
     await page.getByText('Alice', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+    await page.getByText('WhatsApp n’est pas connecté').waitFor();
+    await page.locator('#draft').fill('Réponse en attente de connexion');
+    await page.getByRole('button', { name: 'Enregistrer le brouillon' }).click();
+    await page.getByText('Brouillon enregistré sur ce PC. Aucun message envoyé.').waitFor();
+    await page.getByRole('button', { name: 'Clore', exact: true }).click();
+    await page.getByRole('button', { name: 'Rouvrir', exact: true }).waitFor();
+    await page.locator('#nav-contacts').click();
     trace('étape 1');
     await page.getByRole('button', { name: 'Notes', exact: true }).click();
     await page.locator('#note-content').fill('Appel prévu demain');
@@ -43,6 +51,7 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     try {
       assert.equal(backupDb.prepare('SELECT name FROM contacts').get().name, 'Alice');
       assert.equal(backupDb.prepare('SELECT content FROM contact_notes').get().content, 'Appel prévu demain');
+      assert.equal(backupDb.prepare('SELECT draft FROM conversations').get().draft, 'Réponse en attente de connexion');
     } finally { backupDb.close(); }
     await page.getByRole('button', { name: 'Sauvegarder', exact: true }).click();
     await page.getByText('Ce fichier existe déjà. Choisissez un nouveau nom.').waitFor();
@@ -57,6 +66,11 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     trace('étape 4');
     page = await launch();
     await page.getByText('Alice', { exact: true }).waitFor();
+    await page.locator('#nav-inbox').click();
+    await page.getByRole('button', { name: /Alice/ }).click();
+    assert.equal(await page.locator('#draft').inputValue(), 'Réponse en attente de connexion');
+    await page.getByRole('button', { name: 'Rouvrir', exact: true }).waitFor();
+    await page.locator('#nav-contacts').click();
     await page.getByRole('button', { name: 'Notes', exact: true }).click();
     await page.getByText('Appel prévu demain').waitFor();
     await page.getByRole('button', { name: 'Fermer les notes' }).click();
@@ -79,6 +93,10 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     await page.getByRole('button', { name: 'Notes', exact: true }).click();
     await page.getByText('Appel prévu demain').waitFor();
     await page.getByRole('button', { name: 'Fermer les notes' }).click();
+    await page.locator('#nav-inbox').click();
+    await page.getByRole('button', { name: /Alice/ }).click();
+    assert.equal(await page.locator('#draft').inputValue(), 'Réponse en attente de connexion');
+    await page.locator('#nav-contacts').click();
     trace('étape 9');
     await page.locator('#search').fill('absent');
     trace('recherche saisie');

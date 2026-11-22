@@ -1,8 +1,9 @@
 # wacrm Local — prototype de contacts sans Docker
 
 Ce prototype Windows contient un **carnet de contacts local**, avec création,
-modification, recherche et suppression, des notes internes par contact, et
-l'export et la restauration d'une sauvegarde SQLite. Il utilise SQLite intégré à Electron ; aucun
+modification, recherche et suppression, des notes internes par contact, une
+boîte de réception locale avec brouillons, et l'export et la restauration d'une
+sauvegarde SQLite. Il utilise SQLite intégré à Electron ; aucun
 Docker, serveur Supabase ou connexion Internet n'est nécessaire pour ces fonctions.
 Les données sont conservées dans le dossier de données de l'utilisateur Windows,
 et non dans le dossier d'installation. Les données et sauvegardes ne sont pas
@@ -10,12 +11,14 @@ chiffrées : protégez votre session Windows et conservez les sauvegardes en lie
 L'export refuse d'écraser un fichier existant. La restauration demande confirmation,
 vérifie le fichier et crée une copie automatique des données précédentes dans le
 sous-dossier `data/backups` du dossier utilisateur de l'application. La restauration
-remplace les contacts et les notes actuels ; elle ne fusionne pas les données.
+remplace les contacts, les notes et les brouillons actuels ; elle ne fusionne pas
+les données.
 
 **Ce n'est pas encore wacrm complet.** Cette première interface locale est
-séparée de l'interface originale, qui reste intacte. Les conversations,
-WhatsApp, les pièces jointes, les automatisations et les autres fonctions n'ont
-pas encore été portées. L'interface originale
+séparée de l'interface originale, qui reste intacte. Les brouillons restent sur
+le PC et ne sont pas envoyés : la connexion WhatsApp et la réception de messages
+ne sont pas implémentées. Les pièces jointes, les automatisations et les autres
+fonctions de l'application d'origine n'ont pas encore été portées. L'interface originale
 utilise Supabase et ne fonctionne pas encore avec la base SQLite. Ne pas utiliser
 ce prototype comme CRM de production ni pour conserver des données critiques.
 

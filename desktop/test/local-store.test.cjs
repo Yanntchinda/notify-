@@ -176,3 +176,47 @@ test('restore rolls back fully if backup violates relationships', (t) => {
     assert.equal(store.listNotes(c.id).length, 0);
   } finally { store.close(); }
 });
+
+test('local conversations keep drafts across restarts without sending messages', (t) => {
+  const file = tempStore(t);
+  let store = openLocalStore(file);
+  const contact = store.createContact({ phone: '+237444', name: 'Client local' });
+  const thread = store.openConversation(contact.id);
+  assert.equal(store.openConversation(contact.id).id, thread.id);
+  assert.equal(store.listConversations().length, 1);
+  assert.equal(store.listConversations()[0].contact_name, 'Client local');
+  assert.equal(store.saveDraft(thread.id, 'Bonjour, je vous réponds bientôt.').draft, 'Bonjour, je vous réponds bientôt.');
+  assert.throws(() => store.saveDraft(thread.id, 'x'.repeat(10001)));
+  assert.throws(() => store.setConversationStatus(thread.id, 'sent'));
+  assert.equal(store.setConversationStatus(thread.id, 'closed').status, 'closed');
+  assert.throws(() => store.openConversation('missing'));
+  store.close();
+  store = openLocalStore(file);
+  assert.equal(store.listConversations()[0].draft, 'Bonjour, je vous réponds bientôt.');
+  assert.equal(store.listConversations()[0].status, 'closed');
+  store.deleteContact(contact.id);
+  assert.equal(store.listConversations().length, 0);
+  store.close();
+});
+
+test('backup and restore preserve local conversation drafts and support version 2 backups', (t) => {
+  const file = tempStore(t);
+  const store = openLocalStore(file);
+  try {
+    const contact = store.createContact({ phone: '+237555', name: 'Client' });
+    const thread = store.openConversation(contact.id);
+    store.saveDraft(thread.id, 'Brouillon dans la sauvegarde');
+    const backup = path.join(path.dirname(file), 'v3.sqlite');
+    store.exportBackup(backup);
+    store.saveDraft(thread.id, 'Brouillon modifié');
+    store.restoreBackup(backup);
+    assert.equal(store.listConversations()[0].draft, 'Brouillon dans la sauvegarde');
+    const legacy = path.join(path.dirname(file), 'v2.sqlite');
+    store.exportBackup(legacy);
+    const old = new DatabaseSync(legacy);
+    old.exec('DROP TABLE conversations; PRAGMA user_version = 2'); old.close();
+    store.restoreBackup(legacy);
+    assert.equal(store.getContact(contact.id).name, 'Client');
+    assert.equal(store.listConversations().length, 0);
+  } finally { store.close(); }
+});

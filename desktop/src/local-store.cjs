@@ -7,7 +7,7 @@ const { randomUUID } = require('node:crypto');
 const { mkdirSync, openSync, closeSync, unlinkSync, statSync } = require('node:fs');
 const path = require('node:path');
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 function requiredText(value, label, max) {
   if (typeof value !== 'string' || !value.trim() || value.trim().length > max) {
@@ -32,15 +32,17 @@ function readBackup(filename) {
     source.exec('PRAGMA query_only = ON; PRAGMA trusted_schema = OFF;');
     if (source.prepare('PRAGMA quick_check(1)').get().quick_check !== 'ok') throw new Error('Sauvegarde endommagée.');
     const version = source.prepare('PRAGMA user_version').get().user_version;
-    if (version !== 1 && version !== 2) throw new Error('Version de sauvegarde incompatible.');
-    const tables = source.prepare("SELECT name, type FROM sqlite_schema WHERE name IN ('contacts', 'contact_notes')").all();
+    if (![1, 2, 3].includes(version)) throw new Error('Version de sauvegarde incompatible.');
+    const tables = source.prepare("SELECT name, type FROM sqlite_schema WHERE name IN ('contacts', 'contact_notes', 'conversations')").all();
     if (!tables.some((t) => t.name === 'contacts' && t.type === 'table') ||
-        (version === 2 && !tables.some((t) => t.name === 'contact_notes' && t.type === 'table'))) {
+        (version >= 2 && !tables.some((t) => t.name === 'contact_notes' && t.type === 'table')) ||
+        (version >= 3 && !tables.some((t) => t.name === 'conversations' && t.type === 'table'))) {
       throw new Error('Sauvegarde incompatible.');
     }
     const contacts = source.prepare('SELECT id, phone, name, email, company, created_at, updated_at FROM contacts LIMIT 100001').all();
-    const notes = version === 2 ? source.prepare('SELECT id, contact_id, content, created_at FROM contact_notes LIMIT 200001').all() : [];
-    if (contacts.length > 100000 || notes.length > 200000) throw new Error('Sauvegarde trop volumineuse.');
+    const notes = version >= 2 ? source.prepare('SELECT id, contact_id, content, created_at FROM contact_notes LIMIT 200001').all() : [];
+    const conversations = version >= 3 ? source.prepare('SELECT id, contact_id, status, draft, created_at, updated_at FROM conversations LIMIT 100001').all() : [];
+    if (contacts.length > 100000 || notes.length > 200000 || conversations.length > 100000) throw new Error('Sauvegarde trop volumineuse.');
     for (const c of contacts) {
       requiredText(c.id, 'Identifiant', 64); requiredText(c.phone, 'Téléphone', 64);
       optionalText(c.name, 'Nom', 200); optionalText(c.email, 'Adresse e-mail', 320); optionalText(c.company, 'Entreprise', 200);
@@ -50,7 +52,12 @@ function readBackup(filename) {
       requiredText(n.id, 'Identifiant', 64); requiredText(n.contact_id, 'Identifiant du contact', 64);
       requiredText(n.content, 'Note', 10000); requiredText(n.created_at, 'Date', 64);
     }
-    return { contacts, notes };
+    for (const c of conversations) {
+      requiredText(c.id, 'Identifiant', 64); requiredText(c.contact_id, 'Identifiant du contact', 64);
+      if (!['open', 'closed'].includes(c.status) || typeof c.draft !== 'string' || c.draft.length > 10000) throw new Error('Conversation invalide.');
+      requiredText(c.created_at, 'Date', 64); requiredText(c.updated_at, 'Date', 64);
+    }
+    return { contacts, notes, conversations };
   } finally { source.close(); }
 }
 
@@ -91,6 +98,20 @@ function openLocalStore(filename) {
         PRAGMA user_version = 2;
         COMMIT;`);
     }
+    if (version < 3) {
+      db.exec(`BEGIN IMMEDIATE;
+        CREATE TABLE conversations (
+          id TEXT PRIMARY KEY NOT NULL,
+          contact_id TEXT NOT NULL UNIQUE REFERENCES contacts(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')),
+          draft TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_conversations_updated ON conversations(updated_at DESC);
+        PRAGMA user_version = 3;
+        COMMIT;`);
+    }
     const get = db.prepare('SELECT id, phone, name, email, company, created_at, updated_at FROM contacts WHERE id = ?');
     const list = db.prepare('SELECT id, phone, name, email, company, created_at, updated_at FROM contacts ORDER BY created_at, id');
     const insert = db.prepare('INSERT INTO contacts (id, phone, name, email, company, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -100,6 +121,13 @@ function openLocalStore(filename) {
     const listNotes = db.prepare('SELECT id, contact_id, content, created_at FROM contact_notes WHERE contact_id = ? ORDER BY created_at DESC, id DESC');
     const insertNote = db.prepare('INSERT INTO contact_notes (id, contact_id, content, created_at) VALUES (?, ?, ?, ?)');
     const removeNote = db.prepare('DELETE FROM contact_notes WHERE id = ? AND contact_id = ?');
+    const listConversations = db.prepare(`SELECT v.id, v.contact_id, v.status, v.draft, v.created_at, v.updated_at,
+      c.name AS contact_name, c.phone AS contact_phone FROM conversations v JOIN contacts c ON c.id = v.contact_id ORDER BY v.updated_at DESC, v.id`);
+    const getConversation = db.prepare('SELECT id, contact_id, status, draft, created_at, updated_at FROM conversations WHERE id = ?');
+    const conversationForContact = db.prepare('SELECT id, contact_id, status, draft, created_at, updated_at FROM conversations WHERE contact_id = ?');
+    const insertConversation = db.prepare('INSERT INTO conversations (id, contact_id, status, draft, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+    const updateDraft = db.prepare('UPDATE conversations SET draft = ?, updated_at = ? WHERE id = ?');
+    const updateStatus = db.prepare('UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?');
     function values(input) {
       if (!input || typeof input !== 'object' || Array.isArray(input)) throw new TypeError('Contact invalide.');
       return [requiredText(input.phone, 'Téléphone', 64), optionalText(input.name, 'Nom', 200),
@@ -131,6 +159,29 @@ function openLocalStore(filename) {
       deleteNote(contactId, id) {
         return removeNote.run(requiredText(id, 'Identifiant', 64), requiredText(contactId, 'Identifiant du contact', 64)).changes > 0;
       },
+      listConversations() { return listConversations.all(); },
+      openConversation(contactId) {
+        contactId = requiredText(contactId, 'Identifiant du contact', 64);
+        let conversation = conversationForContact.get(contactId);
+        if (!conversation) {
+          const now = new Date().toISOString();
+          insertConversation.run(randomUUID(), contactId, 'open', '', now, now);
+          conversation = conversationForContact.get(contactId);
+        }
+        return conversation;
+      },
+      saveDraft(id, text) {
+        id = requiredText(id, 'Identifiant', 64);
+        if (typeof text !== 'string' || text.length > 10000) throw new TypeError('Brouillon invalide.');
+        if (!updateDraft.run(text, new Date().toISOString(), id).changes) return null;
+        return getConversation.get(id);
+      },
+      setConversationStatus(id, status) {
+        id = requiredText(id, 'Identifiant', 64);
+        if (!['open', 'closed'].includes(status)) throw new TypeError('Statut invalide.');
+        if (!updateStatus.run(status, new Date().toISOString(), id).changes) return null;
+        return getConversation.get(id);
+      },
       exportBackup(destination) {
         if (typeof destination !== 'string' || !destination.trim()) throw new TypeError('Chemin de sauvegarde invalide.');
         // Reserve a new destination exclusively: never replace an existing file.
@@ -153,6 +204,7 @@ function openLocalStore(filename) {
           db.exec('DELETE FROM contacts');
           for (const c of backup.contacts) insert.run(c.id, c.phone, c.name, c.email, c.company, c.created_at, c.updated_at);
           for (const n of backup.notes) insertNote.run(n.id, n.contact_id, n.content, n.created_at);
+          for (const c of backup.conversations) insertConversation.run(c.id, c.contact_id, c.status, c.draft, c.created_at, c.updated_at);
           db.exec('COMMIT');
         } catch (error) {
           try { db.exec('ROLLBACK'); } catch {}
