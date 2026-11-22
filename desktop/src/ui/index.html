@@ -14,7 +14,7 @@
       <div class="brand"><span class="brand-mark">w</span><span>wacrm <small>LOCAL</small></span></div>
       <div class="workspace"><div class="workspace-icon">W</div><div><strong>Mon espace</strong><span>Stockage sur cet appareil</span></div></div>
       <div class="nav-caption">ESPACE DE TRAVAIL</div>
-      <nav aria-label="Navigation principale"><button id="nav-contacts" class="nav-link nav-selected" type="button" aria-current="page"><span>◉</span> Contacts</button><button id="nav-inbox" class="nav-link" type="button"><span>▤</span> Boîte de réception</button><div class="nav-disabled"><span>▦</span> Tableau de bord <small>À venir</small></div><div class="nav-disabled"><span>⚙</span> Paramètres <small>À venir</small></div></nav>
+      <nav aria-label="Navigation principale"><button id="nav-contacts" class="nav-link nav-selected" type="button" aria-current="page"><span>◉</span> Contacts</button><button id="nav-inbox" class="nav-link" type="button"><span>▤</span> Boîte de réception</button><button id="nav-dashboard" class="nav-link" type="button"><span>▦</span> Statistiques</button><div class="nav-disabled"><span>⚙</span> Paramètres <small>À venir</small></div></nav>
       <div class="sidebar-footer"><span class="status-dot"></span><div><strong>Mode local</strong><p>Vos contacts restent sur ce PC.</p></div></div>
     </aside>
     <main class="main">
@@ -30,6 +30,16 @@
         </section>
         <p id="backup-status" class="backup-status" role="status" hidden></p>
         <p class="privacy">◈ Les données et sauvegardes ne sont pas chiffrées. Protégez votre session Windows et conservez vos sauvegardes en lieu sûr.</p>
+      </div>
+      <div class="content" id="dashboard-view" hidden>
+        <div class="page-heading"><div><div class="eyebrow">ACTIVITÉ DES LIVREURS</div><h1>Statistiques</h1><p>Suivez les produits livrés et les montants déclarés par votre équipe.</p></div><button class="button primary" id="new-report" type="button">+ Nouveau compte rendu</button></div>
+        <div class="notice"><span class="notice-icon">i</span><div><strong>Saisie manuelle pour le moment</strong><p>WhatsApp n’est pas connecté. Les montants et les livraisons sont déclarés, pas automatiquement vérifiés.</p></div></div>
+        <div class="stats-filters card"><label>Du <input id="filter-from" type="date"></label><label>Au <input id="filter-to" type="date"></label><label>Livreur <select id="filter-driver"><option value="">Tous les livreurs</option></select></label><button class="button secondary" id="filter-apply" type="button">Appliquer</button><button class="button secondary" id="filter-clear" type="button">Effacer</button></div>
+        <p id="dashboard-error" class="error" role="alert" hidden></p>
+        <div class="metrics"><div class="metric card"><span>Comptes rendus</span><strong id="metric-reports">0</strong><small>Sur la période sélectionnée</small></div><div class="metric card"><span>Encaissé déclaré</span><strong id="metric-collected">—</strong><small id="metric-collected-count"></small></div><div class="metric card"><span>Versé déclaré</span><strong id="metric-paid">—</strong><small id="metric-paid-count"></small></div></div>
+        <section class="card stats-section"><div class="card-top"><div><h2>Produits livrés</h2><p>Regroupés par désignation et unité exactes</p></div></div><div class="table-wrap"><table><thead><tr><th>PRODUIT</th><th>QUANTITÉ</th><th>UNITÉ</th></tr></thead><tbody id="stats-products"></tbody></table></div><p class="stats-empty" id="stats-products-empty">Aucun produit pour cette période.</p></section>
+        <section class="card stats-section"><div class="card-top"><div><h2>Par livreur</h2><p>Les montants sont déclarés et non confirmés</p></div></div><div class="table-wrap"><table><thead><tr><th>LIVREUR</th><th>COMPTES RENDUS</th><th>ENCAISSÉ DÉCLARÉ</th><th>VERSÉ DÉCLARÉ</th></tr></thead><tbody id="stats-drivers"></tbody></table></div><p class="stats-empty" id="stats-drivers-empty">Aucun compte rendu pour cette période.</p></section>
+        <section class="card stats-section"><div class="card-top"><div><h2>Comptes rendus</h2><p>Consultez les produits de chaque déclaration</p></div></div><div class="table-wrap"><table><thead><tr><th>DATE</th><th>LIVREUR</th><th>ENCAISSÉ</th><th>VERSÉ</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="stats-reports"></tbody></table></div><p class="stats-empty" id="stats-reports-empty">Aucun compte rendu pour cette période.</p></section>
       </div>
       <div class="content" id="inbox-view" hidden>
         <div class="page-heading"><div><div class="eyebrow">SUIVI CLIENT</div><h1>Boîte de réception</h1><p>Préparez vos réponses et suivez vos échanges.</p></div></div>
@@ -57,6 +67,16 @@
       <div id="form-error" class="error" role="alert" hidden></div><div class="dialog-actions"><button type="button" class="button secondary" id="cancel">Annuler</button><button type="submit" class="button primary" id="save">Enregistrer</button></div>
     </form>
   </dialog>
+  <dialog id="report-dialog" class="report-dialog" aria-labelledby="report-title">
+    <form id="report-form"><div class="dialog-head"><div><div class="eyebrow">SAISIE LOCALE</div><h2 id="report-title">Nouveau compte rendu</h2></div><button type="button" id="report-close" class="icon-button" aria-label="Fermer le compte rendu">×</button></div>
+      <p class="dialog-description">Les montants saisis sont déclarés, sans confirmation de paiement.</p>
+      <div class="form-grid"><label>Livreur <span class="required">*</span><select id="report-driver" required><option value="">Sélectionner un contact</option></select></label><label>Date <span class="required">*</span><input id="report-date" type="date" required></label></div>
+      <div class="form-grid"><label>Encaissé déclaré (FCFA)<input id="report-collected" type="number" min="0" step="1" placeholder="Non renseigné"></label><label>Versé déclaré (FCFA)<input id="report-paid" type="number" min="0" step="1" placeholder="Non renseigné"></label></div>
+      <div class="report-lines-header"><strong>Produits livrés</strong><button type="button" id="add-line" class="button secondary">+ Ajouter un produit</button></div><p class="line-help">Utilisez la même désignation et unité pour regrouper les quantités.</p>
+      <div id="report-lines"></div><div id="report-error" class="error" role="alert" hidden></div><div class="dialog-actions"><button type="button" class="button secondary" id="report-cancel">Annuler</button><button type="submit" class="button primary" id="report-save">Enregistrer le compte rendu</button></div>
+    </form>
+  </dialog>
+  <dialog id="report-detail-dialog" aria-labelledby="report-detail-title"><div class="dialog-head"><div><div class="eyebrow">DÉCLARATION LOCALE</div><h2 id="report-detail-title">Produits livrés</h2></div><button type="button" id="report-detail-close" class="icon-button" aria-label="Fermer le détail">×</button></div><div class="table-wrap"><table><thead><tr><th>PRODUIT</th><th>QUANTITÉ</th><th>UNITÉ</th></tr></thead><tbody id="report-detail-lines"></tbody></table></div></dialog>
   <dialog id="notes-dialog" aria-labelledby="notes-title">
     <div class="dialog-head"><div><div class="eyebrow">SUIVI CLIENT</div><h2 id="notes-title">Notes du contact</h2></div><button type="button" id="close-notes" class="icon-button" aria-label="Fermer les notes">×</button></div>
     <p class="dialog-description">Notes internes locales. Elles ne sont pas envoyées au client.</p>

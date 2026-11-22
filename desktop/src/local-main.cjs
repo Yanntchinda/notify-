@@ -28,6 +28,13 @@ function registerHandlers() {
     'conversations:open': (_, contactId) => plain(store.openConversation(contactId)),
     'conversations:draft': (_, id, text) => plain(store.saveDraft(id, text)),
     'conversations:status': (_, id, status) => plain(store.setConversationStatus(id, status)),
+    'deliveries:create': (_, input) => store.createDeliveryReport(input),
+    'deliveries:delete': (_, id) => store.deleteDeliveryReport(id),
+    'deliveries:lines': (_, id) => store.deliveryReportLines(id).map(plain),
+    'deliveries:statistics': (_, filters) => {
+      const stats = store.deliveryStatistics(filters);
+      return { summary: plain(stats.summary), products: stats.products.map(plain), reports: stats.reports.map(plain), drivers: stats.drivers.map(plain) };
+    },
     'backup:export': async () => {
       const result = await dialog.showSaveDialog(window, {
         title: 'Enregistrer une sauvegarde locale',
@@ -47,7 +54,7 @@ function registerHandlers() {
       const confirmation = await dialog.showMessageBox(window, {
         type: 'warning', buttons: ['Annuler', 'Restaurer'], defaultId: 0, cancelId: 0,
         title: 'Confirmer la restauration',
-        message: 'Les contacts, notes et brouillons actuels seront remplacés.',
+        message: 'Les contacts, notes, brouillons et comptes rendus actuels seront remplacés.',
         detail: 'Une copie de sécurité automatique sera conservée sur ce PC avant la restauration. Les fichiers ne sont pas chiffrés.',
       });
       if (confirmation.response !== 1) return false;
@@ -66,6 +73,7 @@ function registerHandlers() {
         if (error instanceof TypeError) throw new Error(error.message);
         if (error.code === 'EEXIST') throw new Error('Ce fichier existe déjà. Choisissez un nouveau nom.');
         if (channel === 'backup:restore') throw new Error('Restauration impossible. Vérifiez que la sauvegarde est compatible et non endommagée. Les données actuelles ont été conservées.');
+        if (channel === 'contacts:delete' && String(error.message).includes('FOREIGN KEY constraint failed')) throw new Error('Ce livreur possède des comptes rendus. Supprimez-les avant de supprimer ce contact.');
         if (String(error.message).includes('UNIQUE constraint failed: contacts.phone')) {
           throw new Error('Ce numéro existe déjà dans les contacts.');
         }

@@ -8,7 +8,7 @@
     "test": "node --test test/*.test.cjs",
     "start": "electron .",
     "dist:win": "electron-builder --win nsis",
-    "test:e2e": "node test-e2e/contacts.cjs"
+    "test:e2e": "node test-e2e/contacts.cjs && node test-e2e/dashboard.cjs"
   },
   "devDependencies": {
     "electron": "^45.4.1",

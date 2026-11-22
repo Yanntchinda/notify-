@@ -2,8 +2,10 @@
 
 Ce prototype Windows contient un **carnet de contacts local**, avec création,
 modification, recherche et suppression, des notes internes par contact, une
-boîte de réception locale avec brouillons, et l'export et la restauration d'une
-sauvegarde SQLite. Il utilise SQLite intégré à Electron ; aucun
+boîte de réception locale avec brouillons, saisie manuelle de comptes rendus
+de livraison multi-produits, tableau de bord filtrable par date et livreur, et
+l'export et la restauration d'une sauvegarde SQLite. Les montants encaissés
+et versés sont des déclarations : ils ne prouvent pas la réception d'un paiement. Il utilise SQLite intégré à Electron ; aucun
 Docker, serveur Supabase ou connexion Internet n'est nécessaire pour ces fonctions.
 Les données sont conservées dans le dossier de données de l'utilisateur Windows,
 et non dans le dossier d'installation. Les données et sauvegardes ne sont pas
@@ -11,13 +13,16 @@ chiffrées : protégez votre session Windows et conservez les sauvegardes en lie
 L'export refuse d'écraser un fichier existant. La restauration demande confirmation,
 vérifie le fichier et crée une copie automatique des données précédentes dans le
 sous-dossier `data/backups` du dossier utilisateur de l'application. La restauration
-remplace les contacts, les notes et les brouillons actuels ; elle ne fusionne pas
-les données.
+remplace les contacts, les notes, les brouillons et les comptes rendus actuels ;
+elle ne fusionne pas les données. La restauration traite les données ligne par
+ligne et n'impose pas de quota de taille ou de nombre de lignes prédéfini.
 
 **Ce n'est pas encore wacrm complet.** Cette première interface locale est
 séparée de l'interface originale, qui reste intacte. Les brouillons restent sur
-le PC et ne sont pas envoyés : la connexion WhatsApp et la réception de messages
-ne sont pas implémentées. Les pièces jointes, les automatisations et les autres
+le PC et ne sont pas envoyés : la connexion WhatsApp, la réception et l'extraction
+automatique de comptes rendus ne sont pas implémentées. Les noms de produits
+sont saisis manuellement et ne sont pas corrigés automatiquement. Les pièces
+jointes, les automatisations et les autres
 fonctions de l'application d'origine n'ont pas encore été portées. L'interface originale
 utilise Supabase et ne fonctionne pas encore avec la base SQLite. Ne pas utiliser
 ce prototype comme CRM de production ni pour conserver des données critiques.

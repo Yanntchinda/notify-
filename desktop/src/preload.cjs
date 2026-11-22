@@ -15,4 +15,8 @@ contextBridge.exposeInMainWorld('localContacts', Object.freeze({
   openConversation: (contactId) => ipcRenderer.invoke('conversations:open', contactId),
   saveDraft: (id, text) => ipcRenderer.invoke('conversations:draft', id, text),
   setConversationStatus: (id, status) => ipcRenderer.invoke('conversations:status', id, status),
+  createDeliveryReport: (input) => ipcRenderer.invoke('deliveries:create', input),
+  deleteDeliveryReport: (id) => ipcRenderer.invoke('deliveries:delete', id),
+  deliveryReportLines: (id) => ipcRenderer.invoke('deliveries:lines', id),
+  deliveryStatistics: (filters) => ipcRenderer.invoke('deliveries:statistics', filters),
 }));

@@ -220,3 +220,88 @@ test('backup and restore preserve local conversation drafts and support version 
     assert.equal(store.listConversations().length, 0);
   } finally { store.close(); }
 });
+
+test('dashboard aggregates declared amounts once per report and products separately by unit', (t) => {
+  const file = tempStore(t);
+  let store = openLocalStore(file);
+  const a = store.createContact({ phone: '+1', name: 'Alain' });
+  const b = store.createContact({ phone: '+2', name: 'Béatrice' });
+  store.createDeliveryReport({ contactId: a.id, date: '2026-11-22', collected: '80000', paid: '70000', lines: [
+    { product: 'Riz', quantity: '2,5', unit: 'sac' }, { product: 'Huile', quantity: '3', unit: 'carton' },
+  ] });
+  store.createDeliveryReport({ contactId: b.id, date: '2026-11-23', collected: '', paid: '0', lines: [
+    { product: 'riz', quantity: '1.25', unit: 'sac' }, { product: 'Riz', quantity: '4', unit: 'kg' },
+  ] });
+  const all = store.deliveryStatistics();
+  assert.equal(all.summary.report_count, 2);
+  assert.equal(all.summary.collected_total, 80000);
+  assert.equal(all.summary.collected_count, 1);
+  assert.equal(all.summary.paid_total, 70000);
+  assert.equal(all.summary.paid_count, 2);
+  assert.equal(all.products.find((p) => p.unit === 'sac').quantity_milli, 3750);
+  assert.equal(all.products.find((p) => p.unit === 'kg').quantity_milli, 4000);
+  assert.equal(all.drivers.length, 2);
+  assert.equal(store.deliveryStatistics({ from: '2026-11-23' }).summary.report_count, 1);
+  assert.equal(store.deliveryStatistics({ contactId: a.id }).summary.report_count, 1);
+  assert.throws(() => store.deleteContact(a.id));
+  store.close();
+  store = openLocalStore(file);
+  assert.equal(store.deliveryStatistics().summary.report_count, 2);
+  store.close();
+});
+
+test('invalid report data fails without saving partial reports', (t) => {
+  const store = openLocalStore(tempStore(t));
+  try {
+    const c = store.createContact({ phone: '+55' });
+    const good = { contactId: c.id, date: '2026-11-22', lines: [{ product: 'Riz', unit: 'sac', quantity: '1' }] };
+    assert.throws(() => store.createDeliveryReport({ ...good, date: '2026-02-30' }));
+    assert.throws(() => store.createDeliveryReport({ ...good, collected: '-5' }));
+    assert.throws(() => store.createDeliveryReport({ ...good, paid: '1.5' }));
+    assert.throws(() => store.createDeliveryReport({ ...good, lines: [] }));
+    assert.throws(() => store.createDeliveryReport({ ...good, lines: [...good.lines, { product: 'Huile', quantity: '-2', unit: 'litre' }] }));
+    assert.throws(() => store.createDeliveryReport({ ...good, contactId: 'missing' }));
+    assert.throws(() => store.deliveryStatistics({ from: '2026-12-01', to: '2026-11-01' }));
+    assert.equal(store.deliveryStatistics().summary.report_count, 0);
+  } finally { store.close(); }
+});
+
+test('backup restores reports and product lines atomically and old backups remain usable', (t) => {
+  const file = tempStore(t);
+  const store = openLocalStore(file);
+  try {
+    const c = store.createContact({ phone: '+77', name: 'Livreur' });
+    const report = store.createDeliveryReport({ contactId: c.id, date: '2026-11-22', collected: '10', paid: '5', lines: [{ product: 'Riz', unit: 'sac', quantity: '2' }] });
+    const backup = path.join(path.dirname(file), 'livraisons.sqlite');
+    store.exportBackup(backup);
+    store.deleteDeliveryReport(report.id);
+    assert.equal(store.deliveryStatistics().summary.report_count, 0);
+    store.restoreBackup(backup);
+    assert.equal(store.deliveryStatistics().products[0].product, 'Riz');
+    assert.equal(store.deliveryStatistics().summary.paid_total, 5);
+    const legacy = path.join(path.dirname(file), 'v3.sqlite');
+    store.exportBackup(legacy);
+    const old = new DatabaseSync(legacy);
+    old.exec('DROP TABLE delivery_lines; DROP TABLE delivery_reports; PRAGMA user_version = 3'); old.close();
+    store.restoreBackup(legacy);
+    assert.equal(store.listContacts().length, 1);
+    assert.equal(store.deliveryStatistics().summary.report_count, 0);
+  } finally { store.close(); }
+});
+
+test('restoration streams more than 100000 contacts without a fixed row cap', (t) => {
+  const file = tempStore(t);
+  const source = path.join(path.dirname(file), 'large.sqlite');
+  const makeSource = openLocalStore(source); makeSource.close();
+  const raw = new DatabaseSync(source);
+  raw.exec('BEGIN');
+  const insert = raw.prepare('INSERT INTO contacts(id, phone, name, email, company, created_at, updated_at) VALUES(?, ?, ?, NULL, NULL, ?, ?)');
+  for (let i = 0; i < 100001; i++) insert.run(`id-${i}`, `+${i}`, 'Livreur', '2026', '2026');
+  raw.exec('COMMIT'); raw.close();
+  const target = openLocalStore(file);
+  try { assert.equal(target.restoreBackup(source).contactCount, 100001); }
+  finally { target.close(); }
+  const check = new DatabaseSync(file);
+  try { assert.equal(check.prepare('SELECT COUNT(*) AS n FROM contacts').get().n, 100001); }
+  finally { check.close(); }
+});

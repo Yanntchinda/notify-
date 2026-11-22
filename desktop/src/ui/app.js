@@ -19,6 +19,12 @@ function safeError(error) {
   if (text.includes('Note doit contenir')) return 'Saisissez une note.';
   if (text.includes('Ce fichier existe déjà')) return 'Ce fichier existe déjà. Choisissez un nouveau nom.';
   if (text.includes('Restauration impossible')) return 'Restauration impossible. Vérifiez le fichier : les données actuelles ont été conservées.';
+  if (text.includes('Ce livreur possède des comptes rendus')) return 'Ce livreur possède des comptes rendus. Supprimez-les avant de supprimer ce contact.';
+  if (text.includes('date de début doit précéder')) return 'La date de début doit précéder la date de fin.';
+  if (text.includes('Quantité invalide')) return 'Quantité invalide : utilisez au plus trois décimales.';
+  if (text.includes('quantité doit être positive')) return 'La quantité doit être positive.';
+  if (text.includes('montant doit être')) return 'Le montant doit être un nombre entier positif en FCFA.';
+  if (text.includes('au moins un produit')) return 'Ajoutez au moins un produit.';
   return 'Une erreur est survenue. Veuillez réessayer.';
 }
 function cell(row, value) { const element = document.createElement('td'); element.textContent = value || '—'; row.append(element); }
@@ -105,7 +111,7 @@ $('note-form').addEventListener('submit', async (event) => {
 $('close-notes').addEventListener('click', () => $('notes-dialog').close());
 $('backup').addEventListener('click', async () => {
   const status = $('backup-status'); status.hidden = true; $('backup').disabled = true;
-  try { if (await window.localContacts.exportBackup()) { status.textContent = 'Sauvegarde créée. Elle contient vos contacts, notes et brouillons et n’est pas chiffrée.'; status.hidden = false; } }
+  try { if (await window.localContacts.exportBackup()) { status.textContent = 'Sauvegarde créée. Elle contient vos contacts, notes, brouillons et comptes rendus et n’est pas chiffrée.'; status.hidden = false; } }
   catch (error) { status.textContent = safeError(error); status.hidden = false; }
   finally { $('backup').disabled = false; }
 });
@@ -123,9 +129,9 @@ function canDiscardDraft() {
 }
 function setView(view) {
   currentView = view;
-  $('contacts-view').hidden = view !== 'contacts'; $('inbox-view').hidden = view !== 'inbox';
-  $('page-title').textContent = view === 'contacts' ? 'Contacts' : 'Boîte de réception';
-  for (const [id, name] of [['nav-contacts', 'contacts'], ['nav-inbox', 'inbox']]) {
+  $('contacts-view').hidden = view !== 'contacts'; $('inbox-view').hidden = view !== 'inbox'; $('dashboard-view').hidden = view !== 'dashboard';
+  $('page-title').textContent = ({ contacts: 'Contacts', inbox: 'Boîte de réception', dashboard: 'Statistiques' })[view];
+  for (const [id, name] of [['nav-contacts', 'contacts'], ['nav-inbox', 'inbox'], ['nav-dashboard', 'dashboard']]) {
     $(id).classList.toggle('nav-selected', view === name);
     if (view === name) $(id).setAttribute('aria-current', 'page'); else $(id).removeAttribute('aria-current');
   }
@@ -169,6 +175,10 @@ $('nav-contacts').addEventListener('click', async () => {
   if (currentView === 'contacts' || !canDiscardDraft()) return;
   draftDirty = false; setView('contacts'); await refresh();
 });
+$('nav-dashboard').addEventListener('click', async () => {
+  if (currentView === 'dashboard' || !canDiscardDraft()) return;
+  draftDirty = false; setView('dashboard'); await refresh(); populateDrivers(); await loadDashboard();
+});
 $('nav-inbox').addEventListener('click', async () => {
   if (currentView === 'inbox') return;
   try { await loadConversations(); showConversation(conversations.find((item) => item.id === selectedConversation?.id)); setView('inbox'); }
@@ -200,6 +210,85 @@ $('conversation-status').addEventListener('click', async () => {
     selectedConversation.status = status; button.textContent = status === 'closed' ? 'Rouvrir' : 'Clore'; await loadConversations();
   } catch (error) { showError($('inbox-error'), safeError(error)); }
   finally { button.disabled = false; }
+});
+function populateDrivers() {
+  for (const id of ['filter-driver', 'report-driver']) {
+    const select = $(id); const previous = select.value;
+    select.replaceChildren(); const first = document.createElement('option'); first.value = ''; first.textContent = id === 'filter-driver' ? 'Tous les livreurs' : 'Sélectionner un contact'; select.append(first);
+    for (const contact of contacts) {
+      const option = document.createElement('option'); option.value = contact.id; option.textContent = contact.name ? `${contact.name} · ${contact.phone}` : contact.phone; select.append(option);
+    }
+    select.value = contacts.some((c) => c.id === previous) ? previous : '';
+  }
+}
+const numberFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 });
+function money(value, count = 1) { return count ? `${numberFormat.format(value)} FCFA` : 'Non renseigné'; }
+function renderRows(id, rows, emptyId, cells) {
+  const body = $(id); body.replaceChildren(); $(emptyId).hidden = rows.length > 0;
+  for (const item of rows) { const row = document.createElement('tr'); cells(row, item); body.append(row); }
+}
+async function loadDashboard() {
+  try {
+    const stats = await window.localContacts.deliveryStatistics({ from: $('filter-from').value, to: $('filter-to').value, contactId: $('filter-driver').value });
+    showError($('dashboard-error'), '');
+    $('metric-reports').textContent = numberFormat.format(stats.summary.report_count);
+    $('metric-collected').textContent = money(stats.summary.collected_total, stats.summary.collected_count);
+    $('metric-collected-count').textContent = `${stats.summary.collected_count} montant(s) renseigné(s)`;
+    $('metric-paid').textContent = money(stats.summary.paid_total, stats.summary.paid_count);
+    $('metric-paid-count').textContent = `${stats.summary.paid_count} montant(s) renseigné(s)`;
+    renderRows('stats-products', stats.products, 'stats-products-empty', (row, p) => { cell(row, p.product); cell(row, numberFormat.format(p.quantity_milli / 1000)); cell(row, p.unit); });
+    renderRows('stats-drivers', stats.drivers, 'stats-drivers-empty', (row, d) => { cell(row, d.name || d.phone); cell(row, String(d.report_count)); cell(row, money(d.collected_total, d.collected_count)); cell(row, money(d.paid_total, d.paid_count)); });
+    renderRows('stats-reports', stats.reports, 'stats-reports-empty', (row, report) => {
+      cell(row, report.report_date); cell(row, report.driver_name || report.driver_phone);
+      cell(row, money(report.collected, report.collected !== null)); cell(row, money(report.paid, report.paid !== null));
+      const actions = document.createElement('td'); actions.className = 'actions';
+      actions.append(action('Voir', () => showReportDetail(report)), action('Supprimer', async () => {
+        if (!window.confirm('Supprimer définitivement ce compte rendu ?')) return;
+        try { await window.localContacts.deleteDeliveryReport(report.id); await loadDashboard(); } catch (error) { showError($('dashboard-error'), safeError(error)); }
+      })); row.append(actions);
+    });
+  } catch (error) { showError($('dashboard-error'), safeError(error)); }
+}
+async function showReportDetail(report) {
+  try {
+    const lines = await window.localContacts.deliveryReportLines(report.id);
+    $('report-detail-title').textContent = `${report.driver_name || report.driver_phone} · ${report.report_date}`;
+    const body = $('report-detail-lines'); body.replaceChildren();
+    for (const line of lines) { const row = document.createElement('tr'); cell(row, line.product); cell(row, numberFormat.format(line.quantity_milli / 1000)); cell(row, line.unit); body.append(row); }
+    $('report-detail-dialog').showModal();
+  } catch (error) { showError($('dashboard-error'), safeError(error)); }
+}
+function addReportLine() {
+  const row = document.createElement('div'); row.className = 'report-line';
+  for (const [labelText, cls, placeholder] of [['Produit', 'product', 'Ex. Riz'], ['Quantité', 'quantity', 'Ex. 2,5'], ['Unité', 'unit', 'Ex. sac']]) {
+    const label = document.createElement('label'); label.textContent = labelText;
+    const input = document.createElement('input'); input.className = cls; input.placeholder = placeholder; input.required = true;
+    if (cls === 'quantity') input.inputMode = 'decimal';
+    label.append(input); row.append(label);
+  }
+  const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'button secondary'; remove.textContent = 'Retirer'; remove.setAttribute('aria-label', 'Retirer le produit'); remove.addEventListener('click', () => row.remove()); row.append(remove);
+  $('report-lines').append(row);
+}
+$('filter-apply').addEventListener('click', loadDashboard);
+$('filter-clear').addEventListener('click', async () => { $('filter-from').value = ''; $('filter-to').value = ''; $('filter-driver').value = ''; await loadDashboard(); });
+$('new-report').addEventListener('click', () => {
+  if (!contacts.length) { showError($('dashboard-error'), 'Ajoutez d’abord un livreur dans Contacts.'); return; }
+  showError($('dashboard-error'), ''); showError($('report-error'), ''); $('report-form').reset(); populateDrivers();
+  $('report-date').value = new Date().toLocaleDateString('sv-SE'); $('report-lines').replaceChildren(); addReportLine(); $('report-dialog').showModal();
+});
+$('add-line').addEventListener('click', addReportLine);
+$('report-close').addEventListener('click', () => $('report-dialog').close());
+$('report-cancel').addEventListener('click', () => $('report-dialog').close());
+$('report-detail-close').addEventListener('click', () => $('report-detail-dialog').close());
+$('report-form').addEventListener('submit', async (event) => {
+  event.preventDefault(); showError($('report-error'), '');
+  const lines = Array.from(document.querySelectorAll('#report-lines .report-line'), (row) => ({ product: row.querySelector('.product').value, quantity: row.querySelector('.quantity').value, unit: row.querySelector('.unit').value }));
+  $('report-save').disabled = true;
+  try {
+    await window.localContacts.createDeliveryReport({ contactId: $('report-driver').value, date: $('report-date').value, collected: $('report-collected').value, paid: $('report-paid').value, lines });
+    $('report-dialog').close(); await loadDashboard();
+  } catch (error) { showError($('report-error'), safeError(error)); }
+  finally { $('report-save').disabled = false; }
 });
 window.addEventListener('beforeunload', (event) => { if (draftDirty) { event.preventDefault(); event.returnValue = ''; } });
 $('new-contact').addEventListener('click', () => openForm());
