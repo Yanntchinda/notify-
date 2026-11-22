@@ -93,6 +93,9 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     assert.equal(await page.locator('#contact-count').textContent(), '0');
     await app.close(); app = null;
     console.log('Parcours local Electron : création, doublon, persistance, modification, recherche et suppression OK.');
+  } catch (error) {
+    trace(String(error.stack || error));
+    throw error;
   } finally {
     if (app) await app.close();
     await rm(profile, { recursive: true, force: true });
