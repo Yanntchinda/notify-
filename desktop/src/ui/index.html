@@ -20,7 +20,7 @@
     <main class="main">
       <header class="topbar"><span>Mon espace <span class="divider">/</span> <strong>Contacts</strong></span><span class="prototype">PROTOTYPE LOCAL</span></header>
       <div class="content">
-        <div class="page-heading"><div><div class="eyebrow">VOTRE RÉPERTOIRE</div><h1>Contacts</h1><p>Retrouvez et gérez vos contacts au même endroit.</p></div><button class="button primary" id="new-contact" type="button">+ <span>Nouveau contact</span></button></div>
+        <div class="page-heading"><div><div class="eyebrow">VOTRE RÉPERTOIRE</div><h1>Contacts</h1><p>Retrouvez et gérez vos contacts au même endroit.</p></div><div class="heading-actions"><button class="button secondary" id="backup" type="button">Sauvegarder</button><button class="button primary" id="new-contact" type="button">+ <span>Nouveau contact</span></button></div></div>
         <div class="notice"><span class="notice-icon">i</span><div><strong>Version locale en cours de développement</strong><p>Les contacts sont enregistrés sur cet ordinateur. WhatsApp et les autres fonctions seront ajoutés plus tard.</p></div></div>
         <section class="card" aria-label="Liste des contacts">
           <div class="card-top"><div><h2>Tous les contacts <span id="contact-count" class="count">0</span></h2><p>Votre carnet de contacts local</p></div><label class="search"><span>⌕</span><span class="sr-only">Rechercher un contact</span><input id="search" type="search" placeholder="Rechercher un contact…"></label></div>
@@ -28,7 +28,8 @@
           <div class="table-wrap"><table><thead><tr><th>NOM</th><th>TÉLÉPHONE</th><th>E-MAIL</th><th>ENTREPRISE</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="contacts"></tbody></table></div>
           <div id="empty" class="empty"><div class="empty-icon">♧</div><h3>Aucun contact pour le moment</h3><p>Ajoutez votre premier contact pour commencer.</p><button class="button secondary" id="empty-add" type="button">+ Ajouter un contact</button></div>
         </section>
-        <p class="privacy">◈ Les données de ce prototype ne sont pas chiffrées. Protégez votre session Windows et faites des sauvegardes.</p>
+        <p id="backup-status" class="backup-status" role="status" hidden></p>
+        <p class="privacy">◈ Les données et sauvegardes ne sont pas chiffrées. Protégez votre session Windows et conservez vos sauvegardes en lieu sûr.</p>
       </div>
     </main>
   </div>
@@ -40,6 +41,12 @@
       <label>Entreprise <input id="company" maxlength="200" autocomplete="organization" placeholder="Ex. Mon entreprise"></label>
       <div id="form-error" class="error" role="alert" hidden></div><div class="dialog-actions"><button type="button" class="button secondary" id="cancel">Annuler</button><button type="submit" class="button primary" id="save">Enregistrer</button></div>
     </form>
+  </dialog>
+  <dialog id="notes-dialog" aria-labelledby="notes-title">
+    <div class="dialog-head"><div><div class="eyebrow">SUIVI CLIENT</div><h2 id="notes-title">Notes du contact</h2></div><button type="button" id="close-notes" class="icon-button" aria-label="Fermer les notes">×</button></div>
+    <p class="dialog-description">Notes internes locales. Elles ne sont pas envoyées au client.</p>
+    <div id="notes-list" class="notes-list"></div><p id="notes-empty" class="notes-empty">Aucune note pour ce contact.</p>
+    <form id="note-form"><label for="note-content">Nouvelle note</label><textarea id="note-content" maxlength="10000" required rows="3" placeholder="Ajouter une note de suivi…"></textarea><div id="note-error" class="error" role="alert" hidden></div><div class="dialog-actions"><button type="submit" class="button primary" id="save-note">Ajouter la note</button></div></form>
   </dialog>
 </body>
 </html>

@@ -21,16 +21,30 @@ function registerHandlers() {
     'contacts:create': (_, input) => plain(store.createContact(input)),
     'contacts:update': (_, id, input) => plain(store.updateContact(id, input)),
     'contacts:delete': (_, id) => store.deleteContact(id),
+    'notes:list': (_, id) => store.listNotes(id).map(plain),
+    'notes:add': (_, id, text) => plain(store.addNote(id, text)),
+    'notes:delete': (_, contactId, noteId) => store.deleteNote(contactId, noteId),
+    'backup:export': async () => {
+      const result = await dialog.showSaveDialog(window, {
+        title: 'Enregistrer une sauvegarde locale',
+        defaultPath: `wacrm-sauvegarde-${new Date().toISOString().slice(0, 10)}.sqlite`,
+        filters: [{ name: 'Sauvegarde SQLite', extensions: ['sqlite'] }],
+      });
+      if (result.canceled || !result.filePath) return false;
+      store.exportBackup(result.filePath);
+      return true;
+    },
   };
   for (const [channel, handler] of Object.entries(handlers)) {
-    ipcMain.handle(channel, (event, ...args) => {
+    ipcMain.handle(channel, async (event, ...args) => {
       if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
         throw new Error('Opération non autorisée.');
       }
-      try { return handler(event, ...args); }
+      try { return await handler(event, ...args); }
       catch (error) {
         // Never expose filesystem locations or raw database errors to the renderer.
         if (error instanceof TypeError) throw new Error(error.message);
+        if (error.code === 'EEXIST') throw new Error('Ce fichier existe déjà. Choisissez un nouveau nom.');
         if (String(error.message).includes('UNIQUE constraint failed: contacts.phone')) {
           throw new Error('Ce numéro existe déjà dans les contacts.');
         }

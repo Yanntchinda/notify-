@@ -4,12 +4,15 @@ const dialog = $('contact-dialog');
 const form = $('contact-form');
 let contacts = [];
 let editingId = null;
+let notesContact = null;
 
 function showError(element, message) { element.textContent = message; element.hidden = !message; }
 function safeError(error) {
   const text = String(error?.message || 'Une erreur est survenue.');
   if (text.includes('Ce numéro existe déjà')) return 'Ce numéro existe déjà dans les contacts.';
   if (text.includes('Téléphone doit contenir')) return 'Indiquez un numéro de téléphone.';
+  if (text.includes('Note doit contenir')) return 'Saisissez une note.';
+  if (text.includes('Ce fichier existe déjà')) return 'Ce fichier existe déjà. Choisissez un nouveau nom.';
   return 'Une erreur est survenue. Veuillez réessayer.';
 }
 function cell(row, value) { const element = document.createElement('td'); element.textContent = value || '—'; row.append(element); }
@@ -28,7 +31,7 @@ function render() {
     const label = document.createElement('span'); label.textContent = contact.name || 'Sans nom'; name.append(avatar, label); row.append(name);
     cell(row, contact.phone); cell(row, contact.email); cell(row, contact.company);
     const actions = document.createElement('td'); actions.className = 'actions';
-    actions.append(action('Modifier', () => openForm(contact)), action('Supprimer', () => removeContact(contact))); row.append(actions); body.append(row);
+    actions.append(action('Notes', () => openNotes(contact)), action('Modifier', () => openForm(contact)), action('Supprimer', () => removeContact(contact))); row.append(actions); body.append(row);
   }
   $('empty').hidden = visible.length > 0;
   $('empty').querySelector('h3').textContent = contacts.length ? 'Aucun résultat' : 'Aucun contact pour le moment';
@@ -47,7 +50,7 @@ function openForm(contact = null) {
   dialog.showModal(); $('name').focus();
 }
 async function removeContact(contact) {
-  if (!window.confirm(`Supprimer ${contact.name || contact.phone} ? Cette action est définitive.`)) return;
+  if (!window.confirm(`Supprimer ${contact.name || contact.phone} et ses notes ? Cette action est définitive.`)) return;
   try { await window.localContacts.remove(contact.id); await refresh(); }
   catch (error) { showError($('load-error'), safeError(error)); }
 }
@@ -63,6 +66,42 @@ form.addEventListener('submit', async (event) => {
     dialog.close(); await refresh();
   } catch (error) { showError($('form-error'), safeError(error)); }
   finally { $('save').disabled = false; }
+});
+async function refreshNotes() {
+  try {
+    const notes = await window.localContacts.listNotes(notesContact.id);
+    const list = $('notes-list'); list.replaceChildren(); $('notes-empty').hidden = notes.length > 0;
+    for (const note of notes) {
+      const item = document.createElement('article'); item.className = 'note-item';
+      const content = document.createElement('p'); content.className = 'note-content'; content.textContent = note.content;
+      const meta = document.createElement('div'); meta.className = 'note-meta';
+      const date = document.createElement('time'); date.dateTime = note.created_at; date.textContent = new Date(note.created_at).toLocaleString('fr');
+      meta.append(date, action('Supprimer la note', async () => {
+        if (!window.confirm('Supprimer cette note ?')) return;
+        try { await window.localContacts.removeNote(notesContact.id, note.id); await refreshNotes(); }
+        catch (error) { showError($('note-error'), safeError(error)); }
+      }));
+      item.append(content, meta); list.append(item);
+    }
+  } catch (error) { showError($('note-error'), safeError(error)); }
+}
+async function openNotes(contact) {
+  notesContact = contact; $('notes-title').textContent = `Notes · ${contact.name || contact.phone}`;
+  $('note-form').reset(); showError($('note-error'), ''); $('notes-list').replaceChildren();
+  $('notes-empty').hidden = true; $('notes-dialog').showModal(); await refreshNotes();
+}
+$('note-form').addEventListener('submit', async (event) => {
+  event.preventDefault(); $('save-note').disabled = true; showError($('note-error'), '');
+  try { await window.localContacts.addNote(notesContact.id, $('note-content').value); $('note-content').value = ''; await refreshNotes(); }
+  catch (error) { showError($('note-error'), safeError(error)); }
+  finally { $('save-note').disabled = false; }
+});
+$('close-notes').addEventListener('click', () => $('notes-dialog').close());
+$('backup').addEventListener('click', async () => {
+  const status = $('backup-status'); status.hidden = true; $('backup').disabled = true;
+  try { if (await window.localContacts.exportBackup()) { status.textContent = 'Sauvegarde créée. Elle contient vos contacts et notes et n’est pas chiffrée.'; status.hidden = false; } }
+  catch (error) { status.textContent = safeError(error); status.hidden = false; }
+  finally { $('backup').disabled = false; }
 });
 $('new-contact').addEventListener('click', () => openForm());
 $('empty-add').addEventListener('click', () => openForm());

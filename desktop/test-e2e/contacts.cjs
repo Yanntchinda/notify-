@@ -22,6 +22,23 @@ const assert = require('node:assert/strict');
     await page.locator('#email').fill('alice@example.test');
     await page.getByRole('button', { name: 'Enregistrer' }).click();
     await page.getByText('Alice', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Notes', exact: true }).click();
+    await page.locator('#note-content').fill('Appel prévu demain');
+    await page.getByRole('button', { name: 'Ajouter la note' }).click();
+    await page.getByText('Appel prévu demain').waitFor();
+    await page.getByRole('button', { name: 'Fermer les notes' }).click();
+    const backup = path.join(profile, 'sauvegarde.sqlite');
+    await app.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }); }, backup);
+    await page.getByRole('button', { name: 'Sauvegarder', exact: true }).click();
+    await page.getByText(/Sauvegarde créée/).waitFor();
+    const { DatabaseSync } = require('node:sqlite');
+    const backupDb = new DatabaseSync(backup, { readOnly: true });
+    try {
+      assert.equal(backupDb.prepare('SELECT name FROM contacts').get().name, 'Alice');
+      assert.equal(backupDb.prepare('SELECT content FROM contact_notes').get().content, 'Appel prévu demain');
+    } finally { backupDb.close(); }
+    await page.getByRole('button', { name: 'Sauvegarder', exact: true }).click();
+    await page.getByText('Ce fichier existe déjà. Choisissez un nouveau nom.').waitFor();
     await page.getByRole('button', { name: 'Nouveau contact' }).click();
     await page.locator('#phone').fill('+237600000000');
     await page.getByRole('button', { name: 'Enregistrer' }).click();
@@ -31,6 +48,9 @@ const assert = require('node:assert/strict');
 
     page = await launch();
     await page.getByText('Alice', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Notes', exact: true }).click();
+    await page.getByText('Appel prévu demain').waitFor();
+    await page.getByRole('button', { name: 'Fermer les notes' }).click();
     await page.getByRole('button', { name: 'Modifier' }).click();
     await page.locator('#name').fill('Alice modifiée');
     await page.getByRole('button', { name: 'Enregistrer' }).click();

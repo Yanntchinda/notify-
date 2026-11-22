@@ -59,3 +59,57 @@ test('refuses a newer schema without altering the file', (t) => {
   assert.equal(check.prepare('SELECT COUNT(*) AS count FROM contacts').get().count, 1);
   check.close();
 });
+
+test('notes persist and are removed with the corresponding contact', (t) => {
+  const file = tempStore(t);
+  let store = openLocalStore(file);
+  const contact = store.createContact({ phone: '+237111' });
+  const other = store.createContact({ phone: '+237222' });
+  const note = store.addNote(contact.id, 'Client à rappeler');
+  assert.throws(() => store.addNote(contact.id, '   '));
+  assert.throws(() => store.addNote('missing', 'Invalid contact'));
+  assert.equal(store.deleteNote(other.id, note.id), false);
+  store.close();
+  store = openLocalStore(file);
+  assert.equal(store.listNotes(contact.id)[0].content, 'Client à rappeler');
+  store.deleteContact(contact.id);
+  assert.equal(store.listNotes(contact.id).length, 0);
+  store.close();
+});
+
+test('existing version 1 databases upgrade without losing contacts', (t) => {
+  const file = tempStore(t);
+  require('node:fs').mkdirSync(path.dirname(file), { recursive: true });
+  const db = new DatabaseSync(file);
+  db.exec(`CREATE TABLE contacts (id TEXT PRIMARY KEY NOT NULL, phone TEXT NOT NULL UNIQUE, name TEXT, email TEXT, company TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    INSERT INTO contacts VALUES ('old', '+123', 'Ancien', NULL, NULL, '2026', '2026'); PRAGMA user_version = 1;`);
+  db.close();
+  const store = openLocalStore(file);
+  assert.equal(store.getContact('old').name, 'Ancien');
+  store.addNote('old', 'Après migration');
+  assert.equal(store.listNotes('old').length, 1);
+  store.close();
+});
+
+test('backup is a consistent database and never replaces an existing file', (t) => {
+  const { readFileSync, writeFileSync } = require('node:fs');
+  const file = tempStore(t);
+  const backup = path.join(path.dirname(file), 'copie.sqlite');
+  const store = openLocalStore(file);
+  try {
+    const contact = store.createContact({ phone: '+237333', name: 'Client' });
+    store.addNote(contact.id, 'Note sauvegardée');
+    store.exportBackup(backup);
+    const restored = openLocalStore(backup);
+    try {
+      assert.equal(restored.getContact(contact.id).name, 'Client');
+      assert.equal(restored.listNotes(contact.id)[0].content, 'Note sauvegardée');
+    } finally { restored.close(); }
+    const existing = path.join(path.dirname(file), 'existant.sqlite');
+    writeFileSync(existing, 'ne pas écraser');
+    assert.throws(() => store.exportBackup(existing));
+    assert.equal(readFileSync(existing, 'utf8'), 'ne pas écraser');
+    assert.throws(() => store.exportBackup(file));
+    assert.equal(store.getContact(contact.id).name, 'Client');
+  } finally { store.close(); }
+});
