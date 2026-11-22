@@ -2,30 +2,26 @@
   "name": "wacrm-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Experimental Windows shell for a local wacrm installation",
-  "main": "src/main.cjs",
+  "description": "Prototype de contacts locaux sans Docker",
+  "main": "src/local-main.cjs",
   "scripts": {
     "test": "node --test test/*.test.cjs",
     "start": "electron .",
-    "dist:win": "electron-builder --win nsis"
+    "dist:win": "electron-builder --win nsis",
+    "test:e2e": "node test-e2e/contacts.cjs"
   },
   "devDependencies": {
     "electron": "^45.4.1",
-    "electron-builder": "^26.18.0"
+    "electron-builder": "^26.18.0",
+    "playwright-core": "^1.65.1"
   },
   "build": {
     "appId": "com.wacrm.localdesktop",
-    "productName": "wacrm Local (experimental)",
+    "productName": "wacrm Local Prototype",
     "asar": true,
     "files": [
       "src/**/*",
       "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "resources/standalone",
-        "to": "standalone"
-      }
     ],
     "win": {
       "target": [

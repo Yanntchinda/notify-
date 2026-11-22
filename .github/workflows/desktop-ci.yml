@@ -1,4 +1,4 @@
-name: Desktop prototype checks
+name: Desktop local prototype checks
 on:
   push:
   pull_request:
@@ -10,25 +10,12 @@ concurrency:
   cancel-in-progress: true
 jobs:
   windows-build:
-    name: Windows prototype build (not a release)
+    name: Test and package local contacts prototype
     runs-on: windows-latest
-    timeout-minutes: 45
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-      # Deliberately non-functional: this is a build check, not a configured app.
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-not-a-supabase-key
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:38741
-      NEXT_PUBLIC_APP_LOCALE: en
-      ELECTRON_BUILDER_DISABLE_PUBLISH: 'true'
+    timeout-minutes: 30
     steps:
-      - name: Check out desktop prototype
+      - name: Check out prototype
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Check out exact upstream wacrm
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: ArnasDon/wacrm
-          ref: 6dbeb5bf94d4cf01be351272d0d45b64b1a684d4
-          path: upstream-wacrm
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -39,23 +26,23 @@ jobs:
       - name: Test local SQLite storage under Node
         working-directory: desktop
         run: npm test
-      - name: Test local SQLite storage under the bundled Electron runtime
+      - name: Test local SQLite storage under Electron
         working-directory: desktop
         shell: pwsh
         run: |
           $env:ELECTRON_RUN_AS_NODE = '1'
           & .\node_modules\.bin\electron.cmd --test test/config.test.cjs test/local-store.test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Install wacrm dependencies
-        working-directory: upstream-wacrm
-        run: npm ci --no-audit --no-fund
-      - name: Build wacrm for Windows
-        working-directory: upstream-wacrm
-        run: npm run build
-      - name: Prepare standalone bundle
-        run: node desktop/scripts/prepare-bundle.cjs upstream-wacrm
-      - name: Build experimental installer (no publish)
+      - name: Test contacts in the actual Electron window
+        working-directory: desktop
+        run: npm run test:e2e
+      - name: Build prototype installer
         working-directory: desktop
         run: npm run dist:win -- --publish never
-      # Deliberately do not publish a downloadable installer yet: it uses a
-      # dummy key and does not install or start local Supabase.
+      - name: Save contacts-only prototype (not a release)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wacrm-local-contacts-prototype-windows
+          path: desktop/dist/*.exe
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'">
+  <title>wacrm Local — Contacts</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">w</span><span>wacrm <small>LOCAL</small></span></div>
+      <div class="workspace"><div class="workspace-icon">W</div><div><strong>Mon espace</strong><span>Stockage sur cet appareil</span></div></div>
+      <div class="nav-caption">ESPACE DE TRAVAIL</div>
+      <nav aria-label="Navigation principale"><div class="nav-selected"><span>◉</span> Contacts</div><div class="nav-disabled"><span>▤</span> Boîte de réception <small>À venir</small></div><div class="nav-disabled"><span>▦</span> Tableau de bord <small>À venir</small></div><div class="nav-disabled"><span>⚙</span> Paramètres <small>À venir</small></div></nav>
+      <div class="sidebar-footer"><span class="status-dot"></span><div><strong>Mode local</strong><p>Vos contacts restent sur ce PC.</p></div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><span>Mon espace <span class="divider">/</span> <strong>Contacts</strong></span><span class="prototype">PROTOTYPE LOCAL</span></header>
+      <div class="content">
+        <div class="page-heading"><div><div class="eyebrow">VOTRE RÉPERTOIRE</div><h1>Contacts</h1><p>Retrouvez et gérez vos contacts au même endroit.</p></div><button class="button primary" id="new-contact" type="button">+ <span>Nouveau contact</span></button></div>
+        <div class="notice"><span class="notice-icon">i</span><div><strong>Version locale en cours de développement</strong><p>Les contacts sont enregistrés sur cet ordinateur. WhatsApp et les autres fonctions seront ajoutés plus tard.</p></div></div>
+        <section class="card" aria-label="Liste des contacts">
+          <div class="card-top"><div><h2>Tous les contacts <span id="contact-count" class="count">0</span></h2><p>Votre carnet de contacts local</p></div><label class="search"><span>⌕</span><span class="sr-only">Rechercher un contact</span><input id="search" type="search" placeholder="Rechercher un contact…"></label></div>
+          <div id="load-error" class="error" role="alert" hidden></div>
+          <div class="table-wrap"><table><thead><tr><th>NOM</th><th>TÉLÉPHONE</th><th>E-MAIL</th><th>ENTREPRISE</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="contacts"></tbody></table></div>
+          <div id="empty" class="empty"><div class="empty-icon">♧</div><h3>Aucun contact pour le moment</h3><p>Ajoutez votre premier contact pour commencer.</p><button class="button secondary" id="empty-add" type="button">+ Ajouter un contact</button></div>
+        </section>
+        <p class="privacy">◈ Les données de ce prototype ne sont pas chiffrées. Protégez votre session Windows et faites des sauvegardes.</p>
+      </div>
+    </main>
+  </div>
+  <dialog id="contact-dialog" aria-labelledby="dialog-title">
+    <form id="contact-form"><div class="dialog-head"><div><div class="eyebrow">CARNET D’ADRESSES</div><h2 id="dialog-title">Nouveau contact</h2></div><button type="button" id="close-dialog" class="icon-button" aria-label="Fermer">×</button></div><p class="dialog-description">Les informations sont enregistrées uniquement sur cet appareil.</p>
+      <label>Nom complet <input id="name" maxlength="200" autocomplete="name" placeholder="Ex. Marie Dupont"></label>
+      <label>Numéro de téléphone <span class="required">*</span><input id="phone" maxlength="64" required autocomplete="tel" placeholder="Ex. +237 6 00 00 00 00"></label>
+      <label>Adresse e-mail <input id="email" maxlength="320" type="email" autocomplete="email" placeholder="Ex. marie@exemple.com"></label>
+      <label>Entreprise <input id="company" maxlength="200" autocomplete="organization" placeholder="Ex. Mon entreprise"></label>
+      <div id="form-error" class="error" role="alert" hidden></div><div class="dialog-actions"><button type="button" class="button secondary" id="cancel">Annuler</button><button type="submit" class="button primary" id="save">Enregistrer</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
