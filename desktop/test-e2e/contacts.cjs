@@ -60,7 +60,8 @@ const assert = require('node:assert/strict');
       dialog.showMessageBox = async () => ({ response: 1 });
     }, backup);
     await page.getByRole('button', { name: 'Restaurer', exact: true }).click();
-    await page.getByText(/Sauvegarde restaurée/).waitFor();
+    await page.locator('#backup-status:not([hidden])').waitFor();
+    assert.match(await page.locator('#backup-status').textContent(), /Sauvegarde restaurée/);
     await page.getByText('Alice', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Notes', exact: true }).click();
     await page.getByText('Appel prévu demain').waitFor();
@@ -82,7 +83,7 @@ const assert = require('node:assert/strict');
   console.error(error);
   if (process.env.GITHUB_ACTIONS) {
     const message = String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
-    console.error(`::error title=Electron E2E::${message}`);
+    console.log(`::error title=Electron E2E::${message}`);
   }
   process.exitCode = 1;
 });
