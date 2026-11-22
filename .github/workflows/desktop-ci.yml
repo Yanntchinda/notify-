@@ -39,10 +39,10 @@ jobs:
       - name: Build prototype installer
         working-directory: desktop
         run: npm run dist:win -- --publish never
-      - name: Save contacts-only prototype (not a release)
+      - name: Save experimental local CRM installer (not a release)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: wacrm-local-contacts-prototype-windows
+          name: wacrm-local-prototype-windows
           path: desktop/dist/*.exe
           if-no-files-found: error
           retention-days: 7
