@@ -85,7 +85,11 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     trace('aucun résultat affiché');
     await page.locator('#search').clear();
     trace('recherche effacée');
-    page.once('dialog', (dialog) => dialog.accept());
+    page.once('dialog', async (dialog) => {
+      trace(`dialogue de type ${dialog.type()}`);
+      try { await dialog.accept(); trace('dialogue accepté'); }
+      catch (error) { trace(`échec dialogue: ${String(error.stack || error)}`); }
+    });
     await page.getByRole('button', { name: 'Supprimer' }).click();
     trace('suppression cliquée');
     await page.getByText('Aucun contact pour le moment').waitFor();
