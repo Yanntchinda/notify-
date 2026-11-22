@@ -29,6 +29,10 @@ const trace = (message) => { if (process.env.GITHUB_ACTIONS) fs.appendFileSync(t
     await page.getByRole('button', { name: 'Conversation', exact: true }).click();
     await page.getByText('WhatsApp n’est pas connecté').waitFor();
     await page.locator('#draft').fill('Réponse en attente de connexion');
+    page.once('dialog', async (confirm) => { await confirm.dismiss(); });
+    await page.locator('#nav-contacts').click();
+    assert.equal(await page.locator('#inbox-view').isVisible(), true);
+    assert.equal(await page.locator('#draft').inputValue(), 'Réponse en attente de connexion');
     await page.getByRole('button', { name: 'Enregistrer le brouillon' }).click();
     await page.getByText('Brouillon enregistré sur ce PC. Aucun message envoyé.').waitFor();
     await page.getByRole('button', { name: 'Clore', exact: true }).click();
