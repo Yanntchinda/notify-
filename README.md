@@ -90,8 +90,9 @@ Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affiche
 
 Par-dessus, le **plan de rues OpenStreetMap** (gratuit, sans clé) se charge dès que le réseau le permet ; CARTO Voyager est disponible en variante via le sélecteur de fond.
 
-- **Sélecteur de fond** en haut à droite de chaque carte : « Plan de rues » (OpenStreetMap) et « Voyager ». Le choix est mémorisé sur l'appareil et repris sur toutes les pages.
-- **Secours automatique** : si le fournisseur ne répond pas (tuiles en erreur, réseau bloqué, timeout de 12 s), le fond bascule sur le fournisseur suivant ; un badge en bas à gauche indique le plan réellement affiché.
+- **Sélecteur de fond** en haut à droite de chaque carte : « Plan embarqué » (par défaut, aucune requête réseau), « OpenStreetMap » et « Voyager ». Le choix est mémorisé sur l'appareil et repris sur toutes les pages.
+- **Aucune erreur 403** : dans un aperçu intégré (iframe) ou après un premier échec, l'application ne tente plus aucun chargement de tuiles. Avant d'activer un fond détaillé, une **sonde unique** vérifie qu'une tuile est réellement accessible ; si elle échoue, aucun autre appel n'est émis.
+- **Secours automatique** : si le fournisseur ne répond pas (tuiles en erreur, réseau bloqué, timeout de 12 s), le fond bascule sur le fournisseur suivant puis sur le plan embarqué ; un badge en bas à gauche indique le plan réellement affiché.
 - **Aucun fournisseur joignable** : la carte reste utilisable grâce au plan embarqué ; le badge indique « Plan simplifié · hors ligne » et un lien **Réessayer** relance le chargement (ou automatiquement au retour du réseau).
 
 ### Recherche de ville et distance sans réseau
