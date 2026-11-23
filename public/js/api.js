@@ -11,6 +11,11 @@ T.api = {
   },
 
   async request(method, url, body) {
+    /* Si une base Supabase est configurée, l'application n'utilise plus le
+       serveur Node : chaque appel est traduit en requêtes Supabase. */
+    if (window.T && T.apiSupabase && T.apiSupabase.configured()) {
+      return T.apiSupabase.request(method, url, body);
+    }
     const target = url.startsWith('http') ? url : `${T.api.base()}${url}`;
     const options = { method, credentials: 'same-origin', headers: {} };
     if (body !== undefined) {

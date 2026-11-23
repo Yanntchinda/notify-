@@ -9,9 +9,10 @@ on:
       - 'v*'
 
 env:
-  # ── URL de l'application déployée (HTTPS obligatoire) ──────────────────
-  # L'APK ouvre cette adresse dans un WebView natif : c'est votre serveur
-  # Node.js derrière un nom de domaine et un certificat HTTPS.
+  # ── Base Supabase (Project Settings → API) ──────────────────────────────
+  SUPABASE_URL: https://VOTRE-PROJET.supabase.co
+  SUPABASE_ANON_KEY: VOTRE-CLE-PUBLIQUE
+  # Adresse publique de l'application (liens de réinitialisation du mot de passe)
   PUBLIC_APP_URL: https://votre-domaine.example
 
 jobs:

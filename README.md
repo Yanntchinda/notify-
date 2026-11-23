@@ -71,8 +71,8 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 | Domaine | Choix |
 |---|---|
 | Backend | Node.js + Express 5 |
-| Persistance | Fichier JSON (`data/db.json`) avec écriture atomique — adapté à un prototype, à remplacer par PostgreSQL/MySQL en production |
-| Authentification | Sessions par cookie HTTP-only, mots de passe hachés avec `scrypt` |
+| Persistance | **Supabase (PostgreSQL)** — base, authentification et stockage managés, sans serveur. En local, un fichier JSON (`data/db.json`) reste disponible pour le développement. |
+| Authentification | Supabase Auth (sessions JWT, mots de passe hachés par le service) |
 | Frontend | HTML/CSS/JavaScript vanilla, SPA par hash routing |
 | Carte | Leaflet + **plan embarqué** (Natural Earth) + plan détaillé gratuit automatiquement sélectionné parmi 7 fournisseurs (OpenStreetMap, OSM France, OSM Allemagne, OpenTopoMap, CARTO Voyager, Esri World Street Map, Wikimedia) + imagerie Esri |
 | Géocodage | Nominatim (OpenStreetMap) |
@@ -239,32 +239,45 @@ cd android && ./gradlew assembleRelease
 # signer avec apksigner puis téléverser le .aab/.apk sur Play Console
 ```
 
-### Hébergement (obligatoire pour les applications mobiles)
+### Hébergement — plus de serveur
 
-Les applications Android et iOS ne contiennent que l'interface : elles ont besoin d'un **serveur Node.js accessible en HTTPS**. Deux éléments sont hébergés ensemble (même processus) :
+L'application ne contient **aucun serveur à administrer** : l'interface est statique (GitHub Pages, Netlify, n'importe quel hébergeur gratuit) et les données vivent dans **Supabase** (PostgreSQL + authentification + stockage, offre gratuite).
 
-| Élément | Rôle |
-|---|---|
-| `server/index.js` | API (cotations, authentification, admin) |
-| `public/` | Interface web (servie par le même serveur) |
+| Élément | Rôle | Où |
+|---|---|---|
+| `public/` | Interface web + application mobile | Hébergement statique gratuit (GitHub Pages) |
+| Supabase | Base, authentification, fichiers, e-mails | https://supabase.com (gratuit) |
+| APK / iOS | Fenêtres natives qui parlent à Supabase | GitHub Actions |
 
-**Option 1 — Plateforme managée (le plus simple)**
-1. Pousser le dépôt sur GitHub.
-2. Créer un « Web Service » sur Render (le `render.yaml` est fourni), Railway ou Fly.io.
-3. Commande de build : `npm ci` — commande de démarrage : `npm start` — contrôle de santé : `/api/health`.
-4. Récupérer l'URL fournie (`https://xxx.onrender.com`) ou brancher votre domaine.
-5. Reporter cette adresse dans `PUBLIC_APP_URL` des deux workflows, puis relancer les builds.
+#### Mise en place (≈ 15 minutes)
 
-**Option 2 — VPS avec Docker**
+1. **Créer le projet** sur https://supabase.com (offre gratuite, 500 Mo).
+2. **Créer les tables** : SQL Editor → coller `supabase/schema.sql` → **Run**.
+3. **Charger la démonstration** : SQL Editor → coller `supabase/seed.sql` → **Run**.
+4. **Récupérer les clés** : Project Settings → API → `Project URL` et `anon public`.
+5. **Configurer l'application** : renseigner `supabaseUrl`, `supabaseAnonKey` et `appUrl` dans `public/js/config.js`.
+6. **Créer le compte admin** : s'inscrire dans l'application avec `admin@transit.app`, puis dans SQL Editor :
+   ```sql
+   update public.profiles set role = 'admin' where email = 'admin@transit.app';
+   ```
+7. **Désactiver la confirmation par e-mail** (comptes de démonstration) : Authentication → Providers → Email → décocher « Confirm email ». Sinon l'utilisateur doit valider son adresse avant de se connecter.
+
+#### E-mails de notification
+
+Une fonction Supabase prévient l'administrateur à chaque demande (le client est répondu à la main depuis votre téléphone) :
+
 ```bash
-docker build -t transit .
-docker run -d -p 3000:3000 -v $(pwd)/data:/app/data transit
+npx supabase login
+npx supabase link --project-ref VOTRE-PROJET
+npx supabase secrets set RESEND_API_KEY=... ADMIN_EMAIL=... APP_URL=... MAIL_FROM=...
+npx supabase functions deploy notify
 ```
-Puis Nginx ou Caddy en reverse proxy avec un certificat Let's Encrypt (HTTPS obligatoire : géolocalisation et cookies sécurisés).
 
-**Variables d'environnement** : `PORT`, `APP_URL`, `ADMIN_EMAIL`, et le bloc SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`). Sans SMTP, les e-mails sont simulés et les liens de réinitialisation s'affichent dans la console du serveur.
+Puis **Database → Webhooks** : table `quotes`, événement *Insert*, URL `https://VOTRE-PROJET.supabase.co/functions/v1/notify`.
 
-**Persistance** : `data/db.json` doit être sur un volume persistant (sinon la base est recréée à chaque redémarrage). Sauvegardes : `npm run backup`.
+#### Site web
+
+Pousser le dépôt et activer **GitHub Pages** (branche `main`, dossier `/docs` ou à la racine) — ou déposer `public/` sur Netlify. Aucun backend à déployer.
 
 ### Application iPhone (iOS)
 
@@ -291,7 +304,7 @@ npx cap open ios        # ouvre Xcode
 
 ### Sécurité et déploiement
 
-- **Aucune compilation** : Node.js + fichiers statiques. `npm ci && npm run seed && npm start` derrière un reverse proxy (Nginx/Caddy) avec HTTPS.
+- **Aucun serveur applicatif** : fichiers statiques + Supabase. Le serveur Node (`npm start`) reste disponible pour le développement local et les tests, mais n'est plus nécessaire en production.
 - HTTPS obligatoire (géolocalisation, cookies sécurisés).
 - Mots de passe hachés avec `scrypt`, sessions HTTP-only, protection des routes administrateur.
 - Sauvegardes régulières recommandées : `npm run backup` (ou cron) puis copie hors serveur.

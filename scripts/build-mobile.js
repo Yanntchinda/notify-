@@ -19,7 +19,6 @@ const WWW_DIR = path.join(ROOT, 'www');
 const CONFIG_PATH = path.join(ROOT, 'capacitor.config.json');
 
 const platform = (process.argv[2] || 'android').toLowerCase();
-const appUrl = (process.env.PUBLIC_APP_URL || '').trim();
 
 function copyDir(from, to) {
   fs.mkdirSync(to, { recursive: true });
@@ -38,20 +37,30 @@ const config = {
   androidScheme: 'https',
 };
 
-if (appUrl) {
-  config.server = { url: appUrl, cleartext: false };
-}
-
 fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
-
-if (!appUrl) {
-  console.warn('⚠️  PUBLIC_APP_URL non défini : l’application affichera la coquille locale, sans API.');
-  console.warn('   Exemple : PUBLIC_APP_URL=https://transit.example.com npm run build:' + platform);
-}
 
 fs.rmSync(WWW_DIR, { recursive: true, force: true });
 copyDir(PUBLIC_DIR, WWW_DIR);
-console.log(`✓ www/ préparé depuis public/ (${appUrl ? `API sur ${appUrl}` : 'sans serveur'})`);
+
+/* Injection de la configuration Supabase dans l'application embarquée. */
+const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+const supabaseKey = (process.env.SUPABASE_ANON_KEY || '').trim();
+const appUrl = (process.env.PUBLIC_APP_URL || '').trim();
+fs.writeFileSync(
+  path.join(WWW_DIR, 'js', 'config.js'),
+  `'use strict';\nwindow.APP_CONFIG = ${JSON.stringify(
+    { supabaseUrl, supabaseAnonKey: supabaseKey, appUrl },
+    null,
+    2
+  )};\n`
+);
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn('⚠️  SUPABASE_URL / SUPABASE_ANON_KEY non définis : l’application ne pourra pas se connecter à la base.');
+  console.warn('   Exemple : SUPABASE_URL=https://xxx.supabase.co SUPABASE_ANON_KEY=eyJ... npm run build:' + platform);
+} else {
+  console.log(`✓ Supabase configuré (${supabaseUrl})`);
+}
 
 execSync(`npx cap sync ${platform}`, { cwd: ROOT, stdio: 'inherit' });
 console.log(`✓ Projet ${platform} synchronisé`);

@@ -14,7 +14,8 @@
     "test": "node scripts/api-test.js",
     "build:map": "node scripts/build-basemap.js",
     "build:android": "node scripts/build-mobile.js android",
-    "build:ios": "node scripts/build-mobile.js ios"
+    "build:ios": "node scripts/build-mobile.js ios",
+    "build:seed-sql": "node scripts/build-supabase-seed.js"
   },
   "engines": {
     "node": ">=20"
@@ -31,6 +32,7 @@
     "@capacitor/cli": "^6.2.3",
     "@capacitor/core": "^6.2.3",
     "@capacitor/ios": "^6.2.3",
+    "@supabase/supabase-js": "^2.119.2",
     "jsdom": "^31.0.1",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2",
