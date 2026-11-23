@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - 'arena/**'
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
     tags:
       - 'v*'
 

@@ -239,6 +239,56 @@ cd android && ./gradlew assembleRelease
 # signer avec apksigner puis téléverser le .aab/.apk sur Play Console
 ```
 
+### Hébergement (obligatoire pour les applications mobiles)
+
+Les applications Android et iOS ne contiennent que l'interface : elles ont besoin d'un **serveur Node.js accessible en HTTPS**. Deux éléments sont hébergés ensemble (même processus) :
+
+| Élément | Rôle |
+|---|---|
+| `server/index.js` | API (cotations, authentification, admin) |
+| `public/` | Interface web (servie par le même serveur) |
+
+**Option 1 — Plateforme managée (le plus simple)**
+1. Pousser le dépôt sur GitHub.
+2. Créer un « Web Service » sur Render (le `render.yaml` est fourni), Railway ou Fly.io.
+3. Commande de build : `npm ci` — commande de démarrage : `npm start` — contrôle de santé : `/api/health`.
+4. Récupérer l'URL fournie (`https://xxx.onrender.com`) ou brancher votre domaine.
+5. Reporter cette adresse dans `PUBLIC_APP_URL` des deux workflows, puis relancer les builds.
+
+**Option 2 — VPS avec Docker**
+```bash
+docker build -t transit .
+docker run -d -p 3000:3000 -v $(pwd)/data:/app/data transit
+```
+Puis Nginx ou Caddy en reverse proxy avec un certificat Let's Encrypt (HTTPS obligatoire : géolocalisation et cookies sécurisés).
+
+**Variables d'environnement** : `PORT`, `APP_URL`, `ADMIN_EMAIL`, et le bloc SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`). Sans SMTP, les e-mails sont simulés et les liens de réinitialisation s'affichent dans la console du serveur.
+
+**Persistance** : `data/db.json` doit être sur un volume persistant (sinon la base est recréée à chaque redémarrage). Sauvegardes : `npm run backup`.
+
+### Application iPhone (iOS)
+
+Le projet iOS est généré avec Capacitor (`ios/`) : même interface, icône et écran de démarrage dédiés.
+
+**Trois façons d'obtenir l'application sur un iPhone :**
+
+| Méthode | Coût | Ce qu'il faut |
+|---|---|---|
+| **PWA** — Safari → « Sur l'écran d'accueil » | Gratuit | L'application hébergée en HTTPS |
+| **Xcode** — installation sur votre propre iPhone | Gratuit (compte Apple ID) | Un Mac + Xcode, signature valable 7 jours |
+| **TestFlight / App Store** | 99 $/an | Compte Apple Developer, certificats de signature |
+
+**Build automatique (GitHub Actions)** : le workflow `iOS` construit deux artefacts — un `.app` pour le simulateur iOS et une archive iPhone non signée :
+
+https://github.com/Yanntchinda/notify-/actions/workflows/ios.yml
+
+Sur un Mac, pour installer sur votre iPhone avec un compte Apple ID gratuit :
+```bash
+PUBLIC_APP_URL=https://votre-domaine.com npm run build:ios
+npx cap open ios        # ouvre Xcode
+# Dans Xcode : Signing & Capabilities → votre équipe → Brancher l'iPhone → Run
+```
+
 ### Sécurité et déploiement
 
 - **Aucune compilation** : Node.js + fichiers statiques. `npm ci && npm run seed && npm start` derrière un reverse proxy (Nginx/Caddy) avec HTTPS.
