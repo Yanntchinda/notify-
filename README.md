@@ -74,7 +74,7 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 | Persistance | Fichier JSON (`data/db.json`) avec écriture atomique — adapté à un prototype, à remplacer par PostgreSQL/MySQL en production |
 | Authentification | Sessions par cookie HTTP-only, mots de passe hachés avec `scrypt` |
 | Frontend | HTML/CSS/JavaScript vanilla, SPA par hash routing |
-| Carte | Leaflet + plan de rues **OpenStreetMap** (gratuit, sans clé), avec secours automatique CARTO Voyager puis Esri World Street Map |
+| Carte | Leaflet + **plan de rues gratuit** (Esri World Street Map par défaut, OpenStreetMap et CARTO Voyager au choix), sans clé d'API |
 | Géocodage | Nominatim (OpenStreetMap) |
 | Itinéraire | OSRM Public Demo Server (`router.project-osrm.org`) |
 | E-mails | Nodemailer (facultatif, via SMTP) |
@@ -86,7 +86,12 @@ Le cahier des charges proposait Google Maps Platform (payant à l'usage) ou Leaf
 
 ### Plan de rues et secours automatique
 
-Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affichent un **plan de rues gratuit** : OpenStreetMap en fond principal, puis CARTO Voyager, puis Esri World Street Map. Si le fournisseur ne répond pas (tuiles en erreur, réseau bloqué, timeout de 12 s), le fond bascule automatiquement sur le suivant — un badge en bas à gauche indique le plan affiché. Si aucun fournisseur n'est joignable, un message explicite et un bouton **Réessayer** remplacent la zone grise. Aucune clé d'API n'est nécessaire ; seules les attributions sont affichées en bas de carte.
+Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affichent un **plan de rues gratuit** : Esri World Street Map par défaut (routes, villes et frontières lisibles dès les petits zooms), avec OpenStreetMap et CARTO Voyager disponibles.
+
+- **Sélecteur de fond** en haut à droite de chaque carte : « Plan de rues », « OpenStreetMap », « Voyager ». Le choix est mémorisé sur l'appareil et repris sur toutes les pages.
+- **Secours automatique** : si le fournisseur ne répond pas (tuiles en erreur, réseau bloqué, timeout de 12 s), le fond bascule sur le fournisseur suivant ; un badge en bas à gauche indique le plan réellement affiché.
+- **Aucun fournisseur joignable** : message explicite et bouton **Réessayer** à la place d'une zone grise.
+- Aucune clé d'API : seules les attributions sont affichées en bas de carte.
 
 ---
 

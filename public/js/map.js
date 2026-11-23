@@ -5,12 +5,21 @@ window.T = window.T || {};
 (function () {
   const instances = new Set();
 
-  /* Fonds de plan de rues gratuits, du plus fiable au dernier recours.
+  /* Fonds de plan de rues gratuits, du plan de rues classique aux variantes.
      Aucune clé d’API : chaque fournisseur ne demande que l’attribution. */
   const BASE_LAYERS = [
     {
+      id: 'esri',
+      label: 'Plan de rues',
+      name: 'Esri World Street Map',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      options: { maxZoom: 19 },
+      attribution: 'Fond de plan &copy; <a href="https://www.esri.com/">Esri</a>',
+    },
+    {
       id: 'osm',
       label: 'OpenStreetMap',
+      name: 'OpenStreetMap',
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       options: { subdomains: 'abc', maxZoom: 19 },
       attribution:
@@ -18,23 +27,27 @@ window.T = window.T || {};
     },
     {
       id: 'carto',
-      label: 'CARTO Voyager',
+      label: 'Voyager',
+      name: 'CARTO Voyager',
       url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       options: { subdomains: 'abcd', maxZoom: 19 },
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
     },
-    {
-      id: 'esri',
-      label: 'Esri World Street Map',
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-      options: { maxZoom: 19 },
-      attribution: 'Fond de plan &copy; <a href="https://www.esri.com/">Esri</a>',
-    },
   ];
 
+  const BASE_STORAGE_KEY = 'transit_basemap';
   const TILE_ERROR_LIMIT = 6;
   const TILE_TIMEOUT_MS = 12000;
+
+  function preferredBaseId() {
+    try {
+      const saved = localStorage.getItem(BASE_STORAGE_KEY);
+      return BASE_LAYERS.some((item) => item.id === saved) ? saved : null;
+    } catch (err) {
+      return null;
+    }
+  }
 
   function markerColor(role) {
     if (role === 'loading') return '#0e6ba8';
@@ -42,15 +55,41 @@ window.T = window.T || {};
     return '#6c5ce7';
   }
 
+  function buildChain(preferredId) {
+    const preferred = BASE_LAYERS.findIndex((item) => item.id === preferredId);
+    if (preferred < 0) return BASE_LAYERS.slice();
+    return [BASE_LAYERS[preferred], ...BASE_LAYERS.filter((item) => item.id !== preferredId)];
+  }
+
   function attachStreetBase(map, container) {
     let layer = null;
     let dead = false;
     let watchdog = null;
+    let chain = buildChain(preferredBaseId());
+    let pos = 0;
 
     const badge = document.createElement('div');
     badge.className = 'map-source';
-    badge.textContent = `Plan de rues · ${BASE_LAYERS[0].label}`;
+    badge.textContent = `Plan de rues · ${chain[0].name}`;
     container.appendChild(badge);
+
+    const control = document.createElement('div');
+    control.className = 'map-basemap';
+    control.setAttribute('role', 'group');
+    control.setAttribute('aria-label', 'Fond de carte');
+    control.innerHTML = BASE_LAYERS.map(
+      (item) =>
+        `<button type="button" data-base="${item.id}" title="${item.name} — plan gratuit" aria-pressed="false">${item.label}</button>`
+    ).join('');
+    container.appendChild(control);
+
+    function syncControl(activeId) {
+      for (const button of control.querySelectorAll('button[data-base]')) {
+        const on = button.dataset.base === activeId;
+        button.classList.toggle('active', on);
+        button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      }
+    }
 
     function clearWatchdog() {
       if (watchdog) clearTimeout(watchdog);
@@ -83,13 +122,15 @@ window.T = window.T || {};
       });
     }
 
-    function start(index) {
+    function start(nextPos) {
       clearWatchdog();
       stopLayer();
       dead = false;
-      const def = BASE_LAYERS[index];
-      const isLast = index === BASE_LAYERS.length - 1;
-      badge.textContent = `Plan de rues · ${def.label}`;
+      pos = nextPos;
+      const def = chain[pos];
+      const isLast = pos === chain.length - 1;
+      badge.textContent = `Plan de rues · ${def.name}`;
+      syncControl(def.id);
 
       const current = L.tileLayer(def.url, { ...def.options, attribution: def.attribution });
       layer = current;
@@ -113,7 +154,7 @@ window.T = window.T || {};
           showOffline();
           return;
         }
-        start(index + 1);
+        start(pos + 1);
       });
 
       current.addTo(map);
@@ -126,9 +167,23 @@ window.T = window.T || {};
           showOffline();
           return;
         }
-        start(index + 1);
+        start(pos + 1);
       }, TILE_TIMEOUT_MS);
     }
+
+    control.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-base]');
+      if (!button) return;
+      const id = button.dataset.base;
+      if (chain[pos] && chain[pos].id === id) return;
+      chain = buildChain(id);
+      try {
+        localStorage.setItem(BASE_STORAGE_KEY, id);
+      } catch (err) {
+        /* stockage indisponible (navigation privée) : on garde le choix en mémoire */
+      }
+      start(0);
+    });
 
     start(0);
 
@@ -138,6 +193,7 @@ window.T = window.T || {};
         clearWatchdog();
         stopLayer();
         badge.remove();
+        control.remove();
         const overlay = container.querySelector('.map-offline');
         if (overlay) overlay.remove();
       },
