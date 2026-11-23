@@ -28,6 +28,24 @@ window.T = window.T || {};
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://www.openstreetmap.fr/">OSM France</a>',
     },
     {
+      id: 'osmde',
+      label: 'OSM Allemagne',
+      name: 'OpenStreetMap Allemagne',
+      url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+      options: { maxZoom: 18 },
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://www.openstreetmap.de/">OSM Deutschland</a>',
+    },
+    {
+      id: 'topo',
+      label: 'OpenTopoMap',
+      name: 'OpenTopoMap',
+      url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      options: { subdomains: 'abc', maxZoom: 17 },
+      attribution:
+        'Donn&eacute;es &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, style &copy; <a href="https://opentopomap.org/">OpenTopoMap</a> (CC-BY-SA)',
+    },
+    {
       id: 'carto',
       label: 'CARTO Voyager',
       name: 'CARTO Voyager',
@@ -127,7 +145,10 @@ window.T = window.T || {};
     const list = mode === 'satellite' ? [SATELLITE_PROVIDER] : STREET_PROVIDERS;
     const results = await Promise.all(list.map((item) => probeProvider(item)));
     const index = results.findIndex(Boolean);
-    return index >= 0 ? list[index] : null;
+    return {
+      provider: index >= 0 ? list[index] : null,
+      report: list.map((item, position) => ({ id: item.id, name: item.name, ok: Boolean(results[position]) })),
+    };
   }
 
   function markerColor(role) {
@@ -347,15 +368,18 @@ window.T = window.T || {};
     let watchdog = null;
     let dead = false;
     let destroyed = false;
+    let lastReport = [];
 
     const badge = document.createElement('div');
     badge.className = 'map-source';
     badge.innerHTML =
       '<span class="map-source-label"></span>' +
-      '<button type="button" class="map-retry" hidden>Réessayer</button>';
+      '<button type="button" class="map-retry" hidden>Réessayer</button>' +
+      '<button type="button" class="map-details" hidden>Détails</button>';
     container.appendChild(badge);
     const badgeLabel = badge.querySelector('.map-source-label');
     const retry = badge.querySelector('.map-retry');
+    const details = badge.querySelector('.map-details');
 
     const control = document.createElement('div');
     control.className = 'map-basemap';
@@ -374,6 +398,7 @@ window.T = window.T || {};
     function markOnline() {
       badge.classList.remove('is-offline');
       retry.hidden = true;
+      details.hidden = true;
     }
 
     function syncControl(activeId) {
@@ -404,6 +429,7 @@ window.T = window.T || {};
       setLabel(message || 'Plan détaillé indisponible — plan embarqué affiché');
       badge.classList.add('is-offline');
       retry.hidden = false;
+      details.hidden = false;
       try {
         sessionStorage.setItem(BLOCKED_KEY, '1');
       } catch (err) {
@@ -464,14 +490,15 @@ window.T = window.T || {};
       }
 
       setLabel(nextMode === 'satellite' ? 'Satellite · recherche…' : 'Plan de rues · recherche…');
-      const found = await resolveProvider(nextMode);
+      const resolved = await resolveProvider(nextMode);
       if (gen !== generation || destroyed) return;
-      if (!found) {
+      lastReport = resolved.report;
+      if (!resolved.provider) {
         blocked();
         return;
       }
-      setLabel(`${nextMode === 'satellite' ? 'Satellite' : 'Plan de rues'} · ${found.name}`);
-      addTiles(found);
+      setLabel(`${nextMode === 'satellite' ? 'Satellite' : 'Plan de rues'} · ${resolved.provider.name}`);
+      addTiles(resolved.provider);
     }
 
     control.addEventListener('click', (event) => {
@@ -485,6 +512,22 @@ window.T = window.T || {};
         /* noop */
       }
       apply(next);
+    });
+
+    details.addEventListener('click', () => {
+      const rows = (lastReport.length ? lastReport : [{ name: 'Aucun test effectué', ok: false }])
+        .map(
+          (item) =>
+            `<li class="probe-row"><span>${T.ui.esc(item.name)}</span><span class="${item.ok ? 'probe-ok' : 'probe-ko'}">${item.ok ? 'Accessible' : 'Bloqué'}</span></li>`
+        )
+        .join('');
+      T.ui.modal({
+        title: 'Diagnostic des plans de cartes',
+        body:
+          '<p class="modal-message">Chaque serveur de cartes gratuit a été testé avec une seule tuile.</p>' +
+          `<ul class="probe-list">${rows}</ul>` +
+          '<p class="modal-note">Si tous les serveurs sont bloqués, la carte détaillée ne peut pas s’afficher sur ce réseau : demandez à l’administrateur d’autoriser au moins un de ces domaines.</p>',
+      });
     });
 
     retry.addEventListener('click', () => {

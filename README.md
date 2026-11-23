@@ -74,7 +74,7 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 | Persistance | Fichier JSON (`data/db.json`) avec écriture atomique — adapté à un prototype, à remplacer par PostgreSQL/MySQL en production |
 | Authentification | Sessions par cookie HTTP-only, mots de passe hachés avec `scrypt` |
 | Frontend | HTML/CSS/JavaScript vanilla, SPA par hash routing |
-| Carte | Leaflet + **plan embarqué** (Natural Earth) + plan détaillé gratuit automatiquement sélectionné parmi 6 fournisseurs (OpenStreetMap, OSM France, CARTO Voyager, Esri World Street Map, Wikimedia, imagerie Esri) |
+| Carte | Leaflet + **plan embarqué** (Natural Earth) + plan détaillé gratuit automatiquement sélectionné parmi 7 fournisseurs (OpenStreetMap, OSM France, OSM Allemagne, OpenTopoMap, CARTO Voyager, Esri World Street Map, Wikimedia) + imagerie Esri |
 | Géocodage | Nominatim (OpenStreetMap) |
 | Itinéraire | OSRM Public Demo Server (`router.project-osrm.org`) |
 | E-mails | Nodemailer (facultatif, via SMTP) |
@@ -88,7 +88,9 @@ Le cahier des charges proposait Google Maps Platform (payant à l'usage) ou Leaf
 
 Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affichent d'abord un **plan embarqué** : les continents, les frontières des 177 pays **avec leurs noms en français**, 47 villes et leurs libellés sont servis par l'application elle-même (`public/data/`, données Natural Earth du domaine public, 163 Ko). La carte s'affiche donc **même sans accès aux serveurs de tuiles**, et instantanément.
 
-Par-dessus, l'application cherche **le premier plan détaillé réellement joignable** parmi six fournisseurs gratuits : OpenStreetMap, OSM France, CARTO Voyager, Esri World Street Map, Wikimedia Maps, et l'imagerie satellite Esri. Chaque fournisseur est testé par **une seule tuile-sonde** ; le premier qui répond est retenu et mémorisé. Si un réseau bloque OpenStreetMap mais pas CARTO (ou l'inverse), la carte détaillée s'affiche quand même.
+Par-dessus, l'application cherche **le premier plan détaillé réellement joignable** parmi sept fournisseurs gratuits : OpenStreetMap, OSM France, OSM Allemagne, OpenTopoMap, CARTO Voyager, Esri World Street Map et Wikimedia Maps — plus l'imagerie satellite Esri. Chaque fournisseur est testé par **une seule tuile-sonde** ; le premier qui répond est retenu. Si un réseau bloque OpenStreetMap mais pas CARTO (ou l'inverse), la carte détaillée s'affiche quand même.
+
+**Diagnostic intégré** : si aucun serveur ne répond, le lien « Détails » du badge ouvre la liste de tous les fournisseurs testés avec leur état (Accessible / Bloqué). C'est le rapport à transmettre à l'administrateur réseau pour faire autoriser le bon domaine.
 
 - **Sélecteur de fond** en haut à droite de chaque carte : « Plan embarqué », « Plan de rues », « Satellite ». Le choix est mémorisé sur l'appareil et repris sur toutes les pages.
 - **Aucune erreur 403** : dans un aperçu intégré (iframe) ou après un premier échec, l'application ne tente plus aucun chargement de tuiles. Avant d'activer un fond détaillé, une **sonde unique** vérifie qu'une tuile est réellement accessible ; si elle échoue, aucun autre appel n'est émis.

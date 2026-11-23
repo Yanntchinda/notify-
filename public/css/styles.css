@@ -1605,8 +1605,61 @@ ul {
   cursor: pointer;
 }
 
-.map-retry[hidden] {
+.map-retry[hidden],
+.map-details[hidden] {
   display: none;
+}
+
+.map-details {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.probe-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.probe-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.probe-row:last-child {
+  border-bottom: 0;
+}
+
+.probe-ok {
+  color: #0f7a5a;
+  font-weight: 700;
+}
+
+.probe-ko {
+  color: #b23b3b;
+  font-weight: 700;
+}
+
+.modal-note {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 .leaflet-container {
