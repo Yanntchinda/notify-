@@ -8,3 +8,13 @@ backups/
 .env.local
 .DS_Store
 *.log
+
+# Application Android (Capacitor) — fichiers générés
+www/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/

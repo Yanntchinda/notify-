@@ -3,7 +3,15 @@
 window.T = window.T || {};
 
 T.api = {
+  /* Dans l'application Android (Capacitor), l'interface est servie localement et
+     l'API reste sur le serveur : l'URL de base est injectée au moment du build
+     (scripts/build-android.js) et vaut '' sur le site web. */
+  base() {
+    return (typeof window !== 'undefined' && window.T_API_BASE) || '';
+  },
+
   async request(method, url, body) {
+    const target = url.startsWith('http') ? url : `${T.api.base()}${url}`;
     const options = { method, credentials: 'same-origin', headers: {} };
     if (body !== undefined) {
       options.headers['Content-Type'] = 'application/json';
@@ -11,7 +19,7 @@ T.api = {
     }
     let response;
     try {
-      response = await fetch(url, options);
+      response = await fetch(target, options);
     } catch (err) {
       throw new Error('Connexion impossible. Vérifiez votre accès à Internet.');
     }

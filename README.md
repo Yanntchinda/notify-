@@ -198,6 +198,43 @@ Les tuiles sont chargées **par le navigateur du visiteur**, pas par le serveur 
 
 Sur un réseau d'entreprise, un campus ou un pays qui filtre ces domaines, deux options : faire autoriser au moins un des domaines par l'administrateur, ou servir les tuiles depuis votre propre domaine (fournisseur avec clé, ou serveur de tuiles auto-hébergé) en changeant l'URL dans `STREET_PROVIDERS` (`public/js/map.js`).
 
+### Version Android (APK)
+
+L'application est empaquetée avec **Capacitor** : l'APK ouvre l'application dans un WebView natif, plein écran, avec son icône et son écran de démarrage. La géolocalisation (« Me localiser ») est autorisée par le manifeste Android.
+
+**Prérequis** : l'application doit être déployée et accessible en **HTTPS** (l'APK pointe vers cette adresse). Sans serveur, l'APK affiche la coquille locale sans API.
+
+#### Construire l'APK automatiquement (GitHub Actions)
+
+1. Ouvrir `.github/workflows/android.yml` et remplacer `PUBLIC_APP_URL` par l'adresse de votre application :
+   ```yaml
+   env:
+     PUBLIC_APP_URL: https://transit.votre-domaine.com
+   ```
+2. Pousser le code : `git push`. Aller dans l'onglet **Actions** du dépôt GitHub.
+3. Choisir **Android APK** → **Run workflow** (ou pousser un tag `v1.0.0`).
+4. À la fin du travail, télécharger l'artefact **transit-apk** :
+   - `app-debug.apk` — installable immédiatement sur un téléphone (activation « sources inconnues ») ;
+   - `app-release-unsigned.apk` — à signer pour une publication.
+
+#### Construire l'APK sur sa machine
+
+```bash
+npm ci
+PUBLIC_APP_URL=https://transit.votre-domaine.com npm run build:android
+cd android && ./gradlew assembleDebug
+```
+
+Nécessite **JDK 17** et le **SDK Android 34** (Android Studio ou `sdkmanager`). L'APK se trouve dans `android/app/build/outputs/apk/debug/`.
+
+#### Publier sur le Play Store
+
+```bash
+keytool -genkey -v -keystore transit.keystore -alias transit -keyalg RSA -keysize 2048 -validity 10000
+cd android && ./gradlew assembleRelease
+# signer avec apksigner puis téléverser le .aab/.apk sur Play Console
+```
+
 ### Sécurité et déploiement
 
 - **Aucune compilation** : Node.js + fichiers statiques. `npm ci && npm run seed && npm start` derrière un reverse proxy (Nginx/Caddy) avec HTTPS.
