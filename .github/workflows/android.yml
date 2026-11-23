@@ -21,6 +21,9 @@ jobs:
   apk:
     name: Construire l'APK Android
     runs-on: ubuntu-latest
+    # Nécessaire pour joindre l'APK à une Release (téléchargement direct, sans ZIP)
+    permissions:
+      contents: write
 
     steps:
       - name: Récupérer le code
@@ -66,7 +69,7 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Publier les APK
+      - name: Publier les APK (archive Actions)
         uses: actions/upload-artifact@v4
         with:
           name: transit-apk
@@ -74,3 +77,21 @@ jobs:
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+      # L'artefact Actions se télécharge toujours en ZIP. La Release, elle,
+      # fournit le fichier .apk directement — c'est le lien à donner aux clients.
+      - name: Publier l'APK en téléchargement direct
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk
+          name: Application Android — installation directe
+          body: |
+            Application Android (APK) — build automatique.
+
+            **Installation** : télécharger `app-debug.apk`, l'ouvrir sur le téléphone
+            et accepter « Sources inconnues ».
+
+            Android 5.0 ou plus récent.
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
