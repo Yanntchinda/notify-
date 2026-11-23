@@ -24,6 +24,11 @@ jobs:
     # Nécessaire pour joindre l'APK à une Release (téléchargement direct, sans ZIP)
     permissions:
       contents: write
+    env:
+      # Chaque build porte un numéro de version supérieur : l'installation
+      # remplace proprement la version précédente au lieu d'échouer.
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
+      ANDROID_VERSION_NAME: 1.0.${{ github.run_number }}
 
     steps:
       - name: Récupérer le code
@@ -88,6 +93,7 @@ jobs:
           name: Application Android — installation directe
           body: |
             Application Android (APK) — build automatique.
+            Version **${{ github.run_number }}**.
 
             **Installation** : télécharger `app-debug.apk`, l'ouvrir sur le téléphone
             et accepter « Sources inconnues ».

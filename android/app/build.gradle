@@ -7,8 +7,9 @@ android {
         applicationId "cm.transit.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Numéro de version fourni par la CI (permet les mises à jour propres)
+        versionCode (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInteger()
+        versionName (System.getenv("ANDROID_VERSION_NAME") ?: "1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +17,27 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    /* Clé de signature de débogage FIGÉE et versionnée dans le dépôt.
+       Sans elle, chaque build GitHub Actions génère une nouvelle clé :
+       Android refuse alors la mise à jour (« Application non installée »). */
+    signingConfigs {
+        debug {
+            storeFile file('debug-signing.p12')
+            storePassword 'android'
+            keyAlias 'transit-debug'
+            keyPassword 'android'
+            storeType 'pkcs12'
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
         }
     }
 }
