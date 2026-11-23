@@ -2,5 +2,9 @@
   "appId": "cm.transit.app",
   "appName": "Transit Ro-Ro",
   "webDir": "www",
-  "androidScheme": "https"
+  "androidScheme": "https",
+  "server": {
+    "url": "https://transit.example.com",
+    "cleartext": false
+  }
 }

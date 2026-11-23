@@ -13,7 +13,8 @@
     "test:e2e": "node scripts/e2e-ui.js",
     "test": "node scripts/api-test.js",
     "build:map": "node scripts/build-basemap.js",
-    "build:android": "node scripts/build-android.js"
+    "build:android": "node scripts/build-mobile.js android",
+    "build:ios": "node scripts/build-mobile.js ios"
   },
   "engines": {
     "node": ">=20"
@@ -29,6 +30,7 @@
     "@capacitor/android": "^6.2.3",
     "@capacitor/cli": "^6.2.3",
     "@capacitor/core": "^6.2.3",
+    "@capacitor/ios": "^6.2.3",
     "jsdom": "^31.0.1",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2",

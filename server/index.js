@@ -349,6 +349,11 @@ app.post('/api/account/notifications/:id/read', requireAuth, (req, res) => {
 
 /* -------------------------------- Content -------------------------------- */
 
+/* Contrôle de santé utilisé par l'hébergeur (Render, Railway, Fly…) */
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, service: 'transit', uptime: Math.round(process.uptime()) });
+});
+
 app.get('/api/content', (req, res) => {
   const data = db.load();
   const today = new Date().toISOString().slice(0, 10);

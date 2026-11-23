@@ -19,3 +19,12 @@ android/local.properties
 android/app/build/
 android/build/
 artifacts/
+
+# Application iOS (Capacitor) — fichiers générés
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/App/Pods/
+ios/App/build/
+ios/App/build-device/
+ios/DerivedData/

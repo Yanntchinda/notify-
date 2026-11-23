@@ -1,0 +1,57 @@
+name: iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'arena/**'
+    tags:
+      - 'v*'
+
+env:
+  # ── URL de l'application déployée (HTTPS obligatoire) ──────────────────
+  PUBLIC_APP_URL: https://votre-domaine.example
+
+jobs:
+  ios:
+    name: Construire l'application iOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Préparer le projet iOS (Capacitor)
+        run: npm run build:ios
+
+      - name: Construire pour le simulateur iOS
+        working-directory: ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO
+
+      - name: Archiver pour un iPhone (non signé)
+        working-directory: ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build-device CODE_SIGNING_ALLOWED=NO
+
+      - name: Publier les builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: transit-ios
+          if-no-files-found: error
+          path: |
+            ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+            ios/App/build-device/Build/Products/Release-iphoneos/App.app
