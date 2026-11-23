@@ -74,7 +74,7 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 | Persistance | Fichier JSON (`data/db.json`) avec écriture atomique — adapté à un prototype, à remplacer par PostgreSQL/MySQL en production |
 | Authentification | Sessions par cookie HTTP-only, mots de passe hachés avec `scrypt` |
 | Frontend | HTML/CSS/JavaScript vanilla, SPA par hash routing |
-| Carte | Leaflet + OpenStreetMap (tuiles) |
+| Carte | Leaflet + plan de rues **OpenStreetMap** (gratuit, sans clé), avec secours automatique CARTO Voyager puis Esri World Street Map |
 | Géocodage | Nominatim (OpenStreetMap) |
 | Itinéraire | OSRM Public Demo Server (`router.project-osrm.org`) |
 | E-mails | Nodemailer (facultatif, via SMTP) |
@@ -83,6 +83,10 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 ### Pourquoi Leaflet / OpenStreetMap ?
 
 Le cahier des charges proposait Google Maps Platform (payant à l'usage) ou Leaflet + OpenStreetMap + service d'itinéraire libre. Le choix libre a été retenu pour le prototype : aucune clé API, aucun coût, et les mêmes fonctionnalités (carte, marqueurs, polyline, géocodage, distance routière). En production, il est recommandé d'héberger son propre serveur OSRM ou d'utiliser un fournisseur avec SLA, car les serveurs publics de démonstration sont limités.
+
+### Plan de rues et secours automatique
+
+Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affichent un **plan de rues gratuit** : OpenStreetMap en fond principal, puis CARTO Voyager, puis Esri World Street Map. Si le fournisseur ne répond pas (tuiles en erreur, réseau bloqué, timeout de 12 s), le fond bascule automatiquement sur le suivant — un badge en bas à gauche indique le plan affiché. Si aucun fournisseur n'est joignable, un message explicite et un bouton **Réessayer** remplacent la zone grise. Aucune clé d'API n'est nécessaire ; seules les attributions sont affichées en bas de carte.
 
 ---
 

@@ -5,10 +5,143 @@ window.T = window.T || {};
 (function () {
   const instances = new Set();
 
+  /* Fonds de plan de rues gratuits, du plus fiable au dernier recours.
+     Aucune clé d’API : chaque fournisseur ne demande que l’attribution. */
+  const BASE_LAYERS = [
+    {
+      id: 'osm',
+      label: 'OpenStreetMap',
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      options: { subdomains: 'abc', maxZoom: 19 },
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributeurs',
+    },
+    {
+      id: 'carto',
+      label: 'CARTO Voyager',
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      options: { subdomains: 'abcd', maxZoom: 19 },
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    },
+    {
+      id: 'esri',
+      label: 'Esri World Street Map',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      options: { maxZoom: 19 },
+      attribution: 'Fond de plan &copy; <a href="https://www.esri.com/">Esri</a>',
+    },
+  ];
+
+  const TILE_ERROR_LIMIT = 6;
+  const TILE_TIMEOUT_MS = 12000;
+
   function markerColor(role) {
     if (role === 'loading') return '#0e6ba8';
     if (role === 'discharge') return '#0f9d8f';
     return '#6c5ce7';
+  }
+
+  function attachStreetBase(map, container) {
+    let layer = null;
+    let dead = false;
+    let watchdog = null;
+
+    const badge = document.createElement('div');
+    badge.className = 'map-source';
+    badge.textContent = `Plan de rues · ${BASE_LAYERS[0].label}`;
+    container.appendChild(badge);
+
+    function clearWatchdog() {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = null;
+    }
+
+    function stopLayer() {
+      if (!layer) return;
+      try {
+        map.removeLayer(layer);
+      } catch (err) {
+        /* noop */
+      }
+      layer = null;
+    }
+
+    function showOffline() {
+      if (!container.isConnected) return;
+      if (container.querySelector('.map-offline')) return;
+      const overlay = document.createElement('div');
+      overlay.className = 'map-offline';
+      overlay.innerHTML =
+        '<strong>Plan de rues indisponible</strong>' +
+        '<span>Vérifiez votre connexion internet, puis réessayez.</span>' +
+        '<button type="button" class="btn btn-outline btn-sm">Réessayer</button>';
+      container.appendChild(overlay);
+      overlay.querySelector('button').addEventListener('click', () => {
+        overlay.remove();
+        start(0);
+      });
+    }
+
+    function start(index) {
+      clearWatchdog();
+      stopLayer();
+      dead = false;
+      const def = BASE_LAYERS[index];
+      const isLast = index === BASE_LAYERS.length - 1;
+      badge.textContent = `Plan de rues · ${def.label}`;
+
+      const current = L.tileLayer(def.url, { ...def.options, attribution: def.attribution });
+      layer = current;
+      let errors = 0;
+      let loaded = 0;
+      const active = () => layer === current;
+
+      current.on('tileload', () => {
+        if (!active()) return;
+        loaded += 1;
+        clearWatchdog();
+      });
+
+      current.on('tileerror', () => {
+        if (!active() || loaded > 0 || dead) return;
+        errors += 1;
+        if (errors < TILE_ERROR_LIMIT) return;
+        if (isLast) {
+          dead = true;
+          clearWatchdog();
+          showOffline();
+          return;
+        }
+        start(index + 1);
+      });
+
+      current.addTo(map);
+
+      watchdog = setTimeout(() => {
+        watchdog = null;
+        if (!active() || loaded > 0 || dead) return;
+        if (isLast) {
+          dead = true;
+          showOffline();
+          return;
+        }
+        start(index + 1);
+      }, TILE_TIMEOUT_MS);
+    }
+
+    start(0);
+
+    return {
+      destroy() {
+        dead = true;
+        clearWatchdog();
+        stopLayer();
+        badge.remove();
+        const overlay = container.querySelector('.map-offline');
+        if (overlay) overlay.remove();
+      },
+    };
   }
 
   function create(el, options = {}) {
@@ -23,10 +156,7 @@ window.T = window.T || {};
       attributionControl: true,
       worldCopyJump: true,
     });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
+    const base = attachStreetBase(map, el);
     map.setView(options.center || [4.5, 10], options.zoom || 5);
 
     const instance = {
@@ -112,6 +242,7 @@ window.T = window.T || {};
         setTimeout(() => map.invalidateSize(), 60);
       },
       destroy() {
+        if (base) base.destroy();
         map.remove();
       },
     };
