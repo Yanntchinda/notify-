@@ -10,8 +10,10 @@ on:
 
 env:
   # ── Base Supabase (Project Settings → API) ──────────────────────────────
-  SUPABASE_URL: https://VOTRE-PROJET.supabase.co
-  SUPABASE_ANON_KEY: VOTRE-CLE-PUBLIQUE
+  # Laissez vide pour compiler en mode démonstration (contenu embarqué,
+  # aucune donnée enregistrée). Renseignez-les pour la version réelle.
+  SUPABASE_URL: ''
+  SUPABASE_ANON_KEY: ''
   # Adresse publique de l'application (liens de réinitialisation du mot de passe)
   PUBLIC_APP_URL: https://votre-domaine.example
 

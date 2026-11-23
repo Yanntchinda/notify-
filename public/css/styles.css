@@ -3785,3 +3785,29 @@ ul {
     display: none;
   }
 }
+
+/* Bandeau de démonstration — affiché quand aucune base n'est configurée */
+.demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: #fff8e1;
+  border-bottom: 1px solid #f5d980;
+  color: #7a5b00;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.demo-banner svg {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 900px) {
+  .demo-banner {
+    justify-content: center;
+    text-align: center;
+    font-size: 13px;
+  }
+}

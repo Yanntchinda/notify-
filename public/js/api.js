@@ -10,11 +10,44 @@ T.api = {
   },
 
   async request(method, url, body) {
-    /* Si une base Supabase est configurée, l'application n'utilise plus le
-       serveur Node : chaque appel est traduit en requêtes Supabase. */
-    if (window.T && T.apiSupabase && T.apiSupabase.configured()) {
-      return T.apiSupabase.request(method, url, body);
+    try {
+      /* Si une base Supabase est configurée, l'application n'utilise plus le
+         serveur Node : chaque appel est traduit en requêtes Supabase. */
+      if (window.T && T.apiSupabase && T.apiSupabase.configured()) {
+        return await T.apiSupabase.request(method, url, body);
+      }
+      return await T.api.rest(method, url, body);
+    } catch (err) {
+      /* Aucune base joignable : on affiche le contenu de démonstration embarqué
+         pour que l'application reste présentable (APK, hors ligne, première
+         installation). Les demandes de devis restent impossibles : un message
+         clair le signale. */
+      if (method === 'GET' && url === '/api/content') {
+        const demo = await T.api.demoContent();
+        if (demo) return demo;
+      }
+      throw err;
     }
+  },
+
+  /* Contenu de démonstration embarqué (public/data/demo-content.json). */
+  demoMode: false,
+  _demoPromise: null,
+  demoContent() {
+    if (!T.api._demoPromise) {
+      T.api._demoPromise = fetch(`${T.api.base()}/data/demo-content.json`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((content) => {
+          if (!content) return null;
+          T.api.demoMode = true;
+          return content;
+        })
+        .catch(() => null);
+    }
+    return T.api._demoPromise;
+  },
+
+  async rest(method, url, body) {
     const target = url.startsWith('http') ? url : `${T.api.base()}${url}`;
     const options = { method, credentials: 'same-origin', headers: {} };
     if (body !== undefined) {

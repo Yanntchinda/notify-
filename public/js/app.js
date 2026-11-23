@@ -191,8 +191,14 @@
 
   function shell(content, opts = {}) {
     const { active = 'home', nav = true, topbar = true } = opts;
+    const demoBanner = T.api.demoMode
+      ? `<div class="demo-banner" role="status">${icon('info', 16)}
+           <span>Démonstration — la base n'est pas encore connectée. Configurez Supabase pour enregistrer de vraies demandes.</span>
+         </div>`
+      : '';
     document.getElementById('app').innerHTML = `
       ${topbar ? topbarHtml() : ''}
+      ${demoBanner}
       <main class="view">${content}</main>
       ${nav ? bottomNavHtml(active) : ''}
     `;
