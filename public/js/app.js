@@ -885,9 +885,40 @@
       await routeToPort();
     }
 
+    /* Certains navigateurs intègrent l’application dans un cadre (iframe) qui
+       interdit la géolocalisation : on le détecte avant de lancer la demande,
+       pour proposer directement la saisie manuelle au lieu d’un refus brutal. */
+    function geolocationAllowed() {
+      if (!navigator.geolocation) return Promise.resolve(false);
+      if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve(true);
+      return navigator.permissions
+        .query({ name: 'geolocation' })
+        .then((status) => status.state !== 'denied')
+        .catch(() => true);
+    }
+
+    function geolocationUnavailable(message) {
+      if (cfg.locateBtn) setLoading(cfg.locateBtn, false);
+      idle();
+      setPanel(
+        `<div class="distance-idle">${icon('search', 24)}<div><strong>Saisissez votre ville</strong>` +
+          `<p>${message || 'La localisation automatique est bloquée ici, mais la recherche manuelle donne exactement le même résultat.'}</p></div></div>`
+      );
+      if (cfg.inputEl) {
+        cfg.inputEl.focus();
+        cfg.inputEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+      toast('Saisissez votre ville : le calcul de distance fonctionne pareil.', 'info');
+    }
+
     async function locate() {
       if (!navigator.geolocation) {
-        error('La géolocalisation n’est pas prise en charge par ce navigateur. Recherchez votre ville manuellement.');
+        geolocationUnavailable('La géolocalisation n’est pas prise en charge par ce navigateur.');
+        return;
+      }
+      const allowed = await geolocationAllowed();
+      if (!allowed) {
+        geolocationUnavailable('La localisation automatique est désactivée dans ce navigateur.');
         return;
       }
       locating();
@@ -911,12 +942,11 @@
         (err) => {
           if (cfg.locateBtn) setLoading(cfg.locateBtn, false);
           const messages = {
-            1: 'Autorisation refusée. Recherchez votre ville manuellement.',
-            2: 'Position indisponible. Recherchez votre ville manuellement.',
-            3: 'Délai de localisation dépassé. Recherchez votre ville manuellement.',
+            1: 'Localisation non autorisée ici. Saisissez votre ville ci-dessous.',
+            2: 'Position indisponible. Saisissez votre ville ci-dessous.',
+            3: 'Délai de localisation dépassé. Saisissez votre ville ci-dessous.',
           };
-          error(messages[err.code] || 'Impossible de vous localiser. Recherchez votre ville manuellement.');
-          toast('GPS indisponible — utilisez la recherche manuelle.', 'error');
+          geolocationUnavailable(messages[err.code] || 'Localisation impossible. Saisissez votre ville ci-dessous.');
         },
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
       );
@@ -938,7 +968,11 @@
         }
         await setLocation(result, result.displayName);
       } catch (err) {
-        error('Recherche impossible. Vérifiez votre connexion Internet.');
+        if (String(err.message).includes('offline-search')) {
+          error('Ville introuvable. Essayez « Douala », « Yaoundé » ou « Ville, Pays ».');
+        } else {
+          error('Recherche impossible. Vérifiez votre connexion Internet.');
+        }
       } finally {
         if (cfg.searchBtn) setLoading(cfg.searchBtn, false);
       }

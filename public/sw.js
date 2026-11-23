@@ -1,8 +1,25 @@
 'use strict';
 
 /* Service worker minimal : coquille hors ligne, API toujours en réseau. */
-const CACHE = 'transit-shell-v2';
-const SHELL = ['/', '/index.html', '/css/styles.css', '/js/api.js', '/js/ui.js', '/js/map.js', '/js/app.js', '/vendor/leaflet/leaflet.css', '/vendor/leaflet/leaflet.js', '/img/icon.svg', '/manifest.webmanifest'];
+const CACHE = 'transit-shell-v3';
+const SHELL = [
+  '/',
+  '/index.html',
+  '/css/styles.css',
+  '/js/api.js',
+  '/js/ui.js',
+  '/js/map.js',
+  '/js/app.js',
+  '/vendor/leaflet/leaflet.css',
+  '/vendor/leaflet/leaflet.js',
+  '/vendor/topojson/topojson-client.min.js',
+  '/data/basemap-land.json',
+  '/data/basemap-countries.json',
+  '/data/cities.json',
+  '/data/gazetteer.json',
+  '/img/icon.svg',
+  '/manifest.webmanifest',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

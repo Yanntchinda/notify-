@@ -9,16 +9,8 @@ window.T = window.T || {};
      Aucune clé d’API : chaque fournisseur ne demande que l’attribution. */
   const BASE_LAYERS = [
     {
-      id: 'esri',
-      label: 'Plan de rues',
-      name: 'Esri World Street Map',
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-      options: { maxZoom: 19 },
-      attribution: 'Fond de plan &copy; <a href="https://www.esri.com/">Esri</a>',
-    },
-    {
       id: 'osm',
-      label: 'OpenStreetMap',
+      label: 'Plan de rues',
       name: 'OpenStreetMap',
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       options: { subdomains: 'abc', maxZoom: 19 },
@@ -84,6 +76,40 @@ window.T = window.T || {};
     return basemapPromise;
   }
 
+  function ringCentroid(ring) {
+    let twiceArea = 0;
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+      const [x1, y1] = ring[j];
+      const [x2, y2] = ring[i];
+      const factor = x1 * y2 - x2 * y1;
+      twiceArea += factor;
+      cx += (x1 + x2) * factor;
+      cy += (y1 + y2) * factor;
+    }
+    if (!twiceArea) return null;
+    const area = twiceArea / 2;
+    return { area: Math.abs(area), lat: cy / (6 * area), lng: cx / (6 * area) };
+  }
+
+  function featureCentroid(geometry) {
+    const polygons =
+      geometry.type === 'Polygon'
+        ? [geometry.coordinates]
+        : geometry.type === 'MultiPolygon'
+          ? geometry.coordinates
+          : [];
+    let best = null;
+    for (const polygon of polygons) {
+      const ring = polygon && polygon[0];
+      if (!ring) continue;
+      const candidate = ringCentroid(ring);
+      if (candidate && (!best || candidate.area > best.area)) best = candidate;
+    }
+    return best;
+  }
+
   function addLocalBasemap(map, container) {
     const layers = [];
     if (!map.getPane('basemap')) {
@@ -131,6 +157,7 @@ window.T = window.T || {};
             style: { color: '#d5c8b2', weight: 0.8, opacity: 0.85, fill: false },
           }).addTo(map)
         );
+        addCountryLabels(countries);
       }
       for (const city of data.cities) {
         if (!city || !Number.isFinite(city.lat) || !Number.isFinite(city.lng)) continue;
@@ -162,8 +189,56 @@ window.T = window.T || {};
       }
     }
 
+    /* Noms de pays sur le plan embarqué, masqués dès que l’on zoome sur les villes. */
+    let countryGroup = null;
+    let countryZoomHandler = null;
+
+    function addCountryLabels(collection) {
+      const labels = [];
+      for (const feature of collection.features || []) {
+        const props = feature.properties || {};
+        const name = props.nameFr || props.name;
+        const centroid = name && featureCentroid(feature.geometry);
+        if (!centroid || centroid.area < 1.5) continue;
+        labels.push({ name, lat: centroid.lat, lng: centroid.lng });
+      }
+      if (!labels.length) return;
+      countryGroup = L.layerGroup();
+      for (const label of labels) {
+        countryGroup.addLayer(
+          L.marker([label.lat, label.lng], {
+            pane: 'basemap',
+            interactive: false,
+            keyboard: false,
+            icon: L.divIcon({
+              className: 'map-country-label',
+              html: `<span>${T.ui.esc(label.name)}</span>`,
+              iconSize: null,
+              iconAnchor: [0, 0],
+            }),
+          })
+        );
+      }
+      const sync = () => {
+        if (!countryGroup) return;
+        if (map.getZoom() <= 6) countryGroup.addTo(map);
+        else map.removeLayer(countryGroup);
+      };
+      countryZoomHandler = sync;
+      map.on('zoomend', sync);
+      sync();
+    }
+
     return {
       destroy() {
+        if (countryZoomHandler) map.off('zoomend', countryZoomHandler);
+        if (countryGroup) {
+          try {
+            map.removeLayer(countryGroup);
+          } catch (err) {
+            /* noop */
+          }
+        }
         for (const item of layers) {
           try {
             map.removeLayer(item);
@@ -492,7 +567,147 @@ window.T = window.T || {};
     }
   }
 
+  const GAZETTEER_URL = '/data/gazetteer.json';
+  let gazetteerPromise = null;
+
+  function loadGazetteer() {
+    if (!gazetteerPromise) {
+      gazetteerPromise = Promise.all([
+        fetch(GAZETTEER_URL, { headers: { Accept: 'application/json' } })
+          .then((response) => (response.ok ? response.json() : []))
+          .catch(() => []),
+        fetch(BASEMAP_FILES.cities, { headers: { Accept: 'application/json' } })
+          .then((response) => (response.ok ? response.json() : []))
+          .catch(() => []),
+      ]).then(([gazetteer, cities]) => {
+        /* Les villes du plan embarqué portent des noms français : elles enrichissent
+           le répertoire GeoNames (noms locaux) pour les recherches en français. */
+        const extra = (Array.isArray(cities) ? cities : []).map((city) => ({
+          n: city.n,
+          cc: '',
+          country: city.c,
+          lat: city.lat,
+          lng: city.lng,
+        }));
+        return [...extra, ...(Array.isArray(gazetteer) ? gazetteer : [])];
+      });
+    }
+    return gazetteerPromise;
+  }
+
+  function normalizeText(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function regionName(code) {
+    try {
+      if (typeof Intl !== 'undefined' && Intl.DisplayNames) {
+        return new Intl.DisplayNames(['fr'], { type: 'region' }).of(code) || '';
+      }
+    } catch (err) {
+      /* noop */
+    }
+    return '';
+  }
+
+  /* Recherche locale : même sans réseau, une ville suffit pour calculer la distance. */
+  async function searchLocal(query) {
+    const data = await loadGazetteer();
+    if (!Array.isArray(data) || !data.length) return null;
+    const normalized = normalizeText(query);
+    if (!normalized) return null;
+    const parts = normalized.split(',').map((part) => part.trim()).filter(Boolean);
+    const cityPart = parts[0] || '';
+    const countryPart = parts[1] || '';
+    let best = null;
+    let bestScore = 0;
+    for (const city of data) {
+      const name = normalizeText(city.n);
+      if (!name) continue;
+      let score = 0;
+      if (name === cityPart) score = 100;
+      else if (name.startsWith(cityPart)) score = 80;
+      else if (name.includes(cityPart)) score = 50;
+      else if (cityPart.includes(name)) score = 20;
+      if (!score) continue;
+      if (countryPart) {
+        const region = normalizeText(city.country || regionName(city.cc));
+        if (region && (region.includes(countryPart) || countryPart.includes(region))) score += 30;
+        else if (normalizeText(city.cc) === countryPart) score += 30;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = city;
+      }
+    }
+    if (!best) return null;
+    const country = best.country || regionName(best.cc);
+    return {
+      lat: best.lat,
+      lng: best.lng,
+      displayName: `${best.n}, ${country || best.cc}`,
+      city: best.n,
+      country,
+      countryCode: best.cc,
+      name: best.n,
+    };
+  }
+
+  async function reverseLocal(lat, lng) {
+    const data = await loadGazetteer();
+    let best = null;
+    let bestKm = 80;
+    for (const city of data) {
+      const km = haversine({ lat, lng }, city);
+      if (km < bestKm) {
+        bestKm = km;
+        best = city;
+      }
+    }
+    if (!best) return null;
+    const country = best.country || regionName(best.cc);
+    return {
+      lat,
+      lng,
+      displayName: `${best.n}, ${country || best.cc}`,
+      city: best.n,
+      country,
+      countryCode: best.cc,
+      name: best.n,
+    };
+  }
+
   async function search(query) {
+    try {
+      const remote = await searchRemote(query);
+      if (remote) return remote;
+    } catch (err) {
+      const local = await searchLocal(query);
+      if (local) return local;
+      throw new Error('offline-search');
+    }
+    return searchLocal(query);
+  }
+
+  async function reverse(lat, lng) {
+    try {
+      const remote = await reverseRemote(lat, lng);
+      if (remote) return remote;
+    } catch (err) {
+      const local = await reverseLocal(lat, lng);
+      if (local) return local;
+      throw err;
+    }
+    return reverseLocal(lat, lng);
+  }
+
+  async function searchRemote(query) {
     const params = new URLSearchParams({
       format: 'jsonv2',
       q: query,
@@ -521,7 +736,7 @@ window.T = window.T || {};
     };
   }
 
-  async function reverse(lat, lng) {
+  async function reverseRemote(lat, lng) {
     const params = new URLSearchParams({
       format: 'jsonv2',
       lat: String(lat),
