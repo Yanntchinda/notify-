@@ -70,9 +70,10 @@ T.api = {
     } catch (err) {
       data = null;
     }
-    /* Un hébergement statique sans serveur Node renvoie la page HTML au lieu
-       d'une réponse JSON : on le signale clairement plutôt que d'afficher «Erreur 404». */
-    if (data === null && (response.status === 404 || response.status === 503)) {
+    /* Toute réponse non JSON (page HTML d'un hébergement statique, fichier
+       manquant dans l'application installée) est une erreur : sans ça, on
+       renverrait null et l'interface planterait. */
+    if (data === null) {
       throw new Error(
         window.APP_CONFIG
           ? 'Base de données non configurée : renseignez supabaseUrl et supabaseAnonKey dans public/js/config.js.'
