@@ -1,0 +1,10 @@
+node_modules/
+data/db.json
+data/db.json.tmp
+public/uploads/*
+!public/uploads/.gitkeep
+backups/
+.env
+.env.local
+.DS_Store
+*.log

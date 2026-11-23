@@ -1,0 +1,29 @@
+{
+  "name": "transit-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Application de transit Ro-Ro et conteneurs — cotation en ligne, carte, GPS et espace administrateur",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "seed": "node -e \"require('./server/seed').resetAndSeed(); console.log('Base de démonstration réinitialisée')\"",
+    "backup": "node scripts/backup.js",
+    "test:api": "node scripts/api-test.js",
+    "test:e2e": "node scripts/e2e-ui.js",
+    "test": "node scripts/api-test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.10",
+    "express": "^5.1.0",
+    "leaflet": "^1.9.4",
+    "nodemailer": "^7.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "^31.0.1"
+  }
+}
