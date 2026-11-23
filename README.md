@@ -213,9 +213,13 @@ L'application est empaquetée avec **Capacitor** : l'APK ouvre l'application dan
    ```
 2. Pousser le code : `git push`. Aller dans l'onglet **Actions** du dépôt GitHub.
 3. Choisir **Android APK** → **Run workflow** (ou pousser un tag `v1.0.0`).
-4. À la fin du travail, télécharger l'artefact **transit-apk** :
+4. À la fin du travail, télécharger l'artefact **transit-apk** (≈ 10 Mo) :
    - `app-debug.apk` — installable immédiatement sur un téléphone (activation « sources inconnues ») ;
    - `app-release-unsigned.apk` — à signer pour une publication.
+
+   Lien direct : onglet **Actions** → dernière exécution **Android APK** → **Artifacts** → `transit-apk`.
+
+> ⚠️ L'APK ouvre l'adresse `PUBLIC_APP_URL` : tant que cette variable n'est pas remplacée par votre domaine, l'application installée affiche une erreur de connexion. Modifiez la variable, poussez, puis téléchargez le nouvel artefact.
 
 #### Construire l'APK sur sa machine
 
