@@ -192,8 +192,15 @@ Le cahier des charges listait plusieurs points à valider avant le développemen
 | Devises | Prix saisi librement par l'administrateur (FCFA, EUR…) | Devises et règles d'affichage |
 | Paiement | Aucun paiement en ligne : simple demande de prix | — |
 
+### Prérequis réseau de la carte
+
+Les tuiles sont chargées **par le navigateur du visiteur**, pas par le serveur : c'est donc le réseau du visiteur qui doit pouvoir joindre au moins un serveur de cartes. L'application en teste sept (OpenStreetMap, OSM France, OSM Allemagne, OpenTopoMap, CARTO, Esri, Wikimedia) et retient le premier joignable ; sinon elle affiche le plan embarqué et un diagnostic (« Détails » dans le badge).
+
+Sur un réseau d'entreprise, un campus ou un pays qui filtre ces domaines, deux options : faire autoriser au moins un des domaines par l'administrateur, ou servir les tuiles depuis votre propre domaine (fournisseur avec clé, ou serveur de tuiles auto-hébergé) en changeant l'URL dans `STREET_PROVIDERS` (`public/js/map.js`).
+
 ### Sécurité et déploiement
 
+- **Aucune compilation** : Node.js + fichiers statiques. `npm ci && npm run seed && npm start` derrière un reverse proxy (Nginx/Caddy) avec HTTPS.
 - HTTPS obligatoire (géolocalisation, cookies sécurisés).
 - Mots de passe hachés avec `scrypt`, sessions HTTP-only, protection des routes administrateur.
 - Sauvegardes régulières recommandées : `npm run backup` (ou cron) puis copie hors serveur.
