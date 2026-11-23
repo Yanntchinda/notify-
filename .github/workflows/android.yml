@@ -93,7 +93,10 @@ jobs:
 
       - name: Construire l'APK de débogage (installable directement)
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          ./gradlew assembleDebug --no-daemon \
+            -PandroidVersionCode="$ANDROID_VERSION_CODE" \
+            -PandroidVersionName="$ANDROID_VERSION_NAME"
 
       - name: Construire l'APK de release (à signer)
         working-directory: android
