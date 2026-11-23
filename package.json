@@ -11,7 +11,8 @@
     "backup": "node scripts/backup.js",
     "test:api": "node scripts/api-test.js",
     "test:e2e": "node scripts/e2e-ui.js",
-    "test": "node scripts/api-test.js"
+    "test": "node scripts/api-test.js",
+    "build:map": "node scripts/build-basemap.js"
   },
   "engines": {
     "node": ">=20"
@@ -24,6 +25,8 @@
     "nodemailer": "^7.0.0"
   },
   "devDependencies": {
-    "jsdom": "^31.0.1"
+    "jsdom": "^31.0.1",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
   }
 }

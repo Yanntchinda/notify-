@@ -1466,7 +1466,7 @@ ul {
   height: 320px;
   border-radius: 14px;
   overflow: hidden;
-  background: #dfe9f3;
+  background: #d9e7f4;
   position: relative;
   z-index: 0;
 }
@@ -1558,25 +1558,36 @@ ul {
   }
 }
 
-.map-offline {
-  position: absolute;
-  inset: 0;
-  z-index: 600;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px;
-  text-align: center;
-  background: #eef4fa;
-  color: var(--muted);
-  font-size: 13px;
+.map-city-label {
+  color: #6d6455;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
 }
 
-.map-offline strong {
-  color: var(--text);
-  font-size: 14px;
+.map-source.is-offline {
+  background: rgba(255, 249, 236, 0.94);
+  color: #8a6412;
+  pointer-events: auto;
+}
+
+.map-retry {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.map-retry[hidden] {
+  display: none;
 }
 
 .leaflet-container {

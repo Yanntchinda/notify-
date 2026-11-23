@@ -55,6 +55,127 @@ window.T = window.T || {};
     return '#6c5ce7';
   }
 
+  /* ------------------------ Plan de rues embarqué ------------------------ */
+  /* Données Natural Earth (domaine public) servies par l’application : la carte
+     s’affiche même sans accès aux serveurs de tuiles, et les tuiles détaillées
+     se superposent dès qu’elles sont disponibles. */
+  const BASEMAP_FILES = {
+    land: '/data/basemap-land.json',
+    countries: '/data/basemap-countries.json',
+    cities: '/data/cities.json',
+  };
+
+  let basemapPromise = null;
+
+  function loadJson(url) {
+    return fetch(url, { headers: { Accept: 'application/json' } })
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null);
+  }
+
+  function loadBasemap() {
+    if (!basemapPromise) {
+      basemapPromise = Promise.all([
+        loadJson(BASEMAP_FILES.land),
+        loadJson(BASEMAP_FILES.countries),
+        loadJson(BASEMAP_FILES.cities),
+      ]).then(([land, countries, cities]) => ({ land, countries, cities: cities || [] }));
+    }
+    return basemapPromise;
+  }
+
+  function addLocalBasemap(map, container) {
+    const layers = [];
+    if (!map.getPane('basemap')) {
+      map.createPane('basemap');
+      const pane = map.getPane('basemap');
+      pane.style.zIndex = '150';
+      pane.style.pointerEvents = 'none';
+    }
+
+    const decode = (topo, name) => {
+      if (!topo || typeof topojson === 'undefined' || !topo.objects || !topo.objects[name]) return null;
+      try {
+        return topojson.feature(topo, topo.objects[name]);
+      } catch (err) {
+        return null;
+      }
+    };
+
+    loadBasemap().then((data) => {
+      if (!container.isConnected) return;
+      try {
+        addLayers(data);
+      } catch (err) {
+        /* le plan embarqué est un secours : son échec ne doit jamais casser la carte */
+      }
+    });
+
+    function addLayers(data) {
+      const land = decode(data.land, 'land');
+      if (land) {
+        layers.push(
+          L.geoJSON(land, {
+            pane: 'basemap',
+            interactive: false,
+            style: { color: '#e3d8c6', weight: 0.6, fillColor: '#f7f3ea', fillOpacity: 1 },
+          }).addTo(map)
+        );
+      }
+      const countries = decode(data.countries, 'countries');
+      if (countries) {
+        layers.push(
+          L.geoJSON(countries, {
+            pane: 'basemap',
+            interactive: false,
+            style: { color: '#d5c8b2', weight: 0.8, opacity: 0.85, fill: false },
+          }).addTo(map)
+        );
+      }
+      for (const city of data.cities) {
+        if (!city || !Number.isFinite(city.lat) || !Number.isFinite(city.lng)) continue;
+        layers.push(
+          L.circleMarker([city.lat, city.lng], {
+            pane: 'basemap',
+            interactive: false,
+            radius: 2,
+            color: '#8b7f6c',
+            weight: 1,
+            fillColor: '#b9ad97',
+            fillOpacity: 1,
+          }).addTo(map)
+        );
+        if (city.major) {
+          layers.push(
+            L.marker([city.lat, city.lng], {
+              pane: 'basemap',
+              interactive: false,
+              icon: L.divIcon({
+                className: 'map-city-label',
+                html: T.ui.esc(city.n),
+                iconSize: null,
+                iconAnchor: [4, 5],
+              }),
+            }).addTo(map)
+          );
+        }
+      }
+    }
+
+    return {
+      destroy() {
+        for (const item of layers) {
+          try {
+            map.removeLayer(item);
+          } catch (err) {
+            /* noop */
+          }
+        }
+        layers.length = 0;
+      },
+    };
+  }
+
   function buildChain(preferredId) {
     const preferred = BASE_LAYERS.findIndex((item) => item.id === preferredId);
     if (preferred < 0) return BASE_LAYERS.slice();
@@ -70,8 +191,21 @@ window.T = window.T || {};
 
     const badge = document.createElement('div');
     badge.className = 'map-source';
-    badge.textContent = `Plan de rues · ${chain[0].name}`;
+    badge.innerHTML =
+      '<span class="map-source-label"></span>' +
+      '<button type="button" class="map-retry" hidden>Réessayer</button>';
     container.appendChild(badge);
+    const badgeLabel = badge.querySelector('.map-source-label');
+    const retry = badge.querySelector('.map-retry');
+
+    function setLabel(text) {
+      badgeLabel.textContent = text;
+    }
+
+    function markOnline() {
+      badge.classList.remove('is-offline');
+      retry.hidden = true;
+    }
 
     const control = document.createElement('div');
     control.className = 'map-basemap';
@@ -106,20 +240,13 @@ window.T = window.T || {};
       layer = null;
     }
 
+    /* Le plan simplifié embarqué reste affiché : on signale juste que le
+       fond de rues détaillé n’a pas pu être chargé, sans bloquer la carte. */
     function showOffline() {
       if (!container.isConnected) return;
-      if (container.querySelector('.map-offline')) return;
-      const overlay = document.createElement('div');
-      overlay.className = 'map-offline';
-      overlay.innerHTML =
-        '<strong>Plan de rues indisponible</strong>' +
-        '<span>Vérifiez votre connexion internet, puis réessayez.</span>' +
-        '<button type="button" class="btn btn-outline btn-sm">Réessayer</button>';
-      container.appendChild(overlay);
-      overlay.querySelector('button').addEventListener('click', () => {
-        overlay.remove();
-        start(0);
-      });
+      setLabel('Plan simplifié · hors ligne');
+      badge.classList.add('is-offline');
+      retry.hidden = false;
     }
 
     function start(nextPos) {
@@ -129,7 +256,8 @@ window.T = window.T || {};
       pos = nextPos;
       const def = chain[pos];
       const isLast = pos === chain.length - 1;
-      badge.textContent = `Plan de rues · ${def.name}`;
+      markOnline();
+      setLabel(`Plan de rues · ${def.name}`);
       syncControl(def.id);
 
       const current = L.tileLayer(def.url, { ...def.options, attribution: def.attribution });
@@ -141,6 +269,7 @@ window.T = window.T || {};
       current.on('tileload', () => {
         if (!active()) return;
         loaded += 1;
+        markOnline();
         clearWatchdog();
       });
 
@@ -171,6 +300,12 @@ window.T = window.T || {};
       }, TILE_TIMEOUT_MS);
     }
 
+    retry.addEventListener('click', () => {
+      retry.hidden = true;
+      badge.classList.remove('is-offline');
+      start(0);
+    });
+
     control.addEventListener('click', (event) => {
       const button = event.target.closest('button[data-base]');
       if (!button) return;
@@ -185,17 +320,25 @@ window.T = window.T || {};
       start(0);
     });
 
-    start(0);
+    const onOnline = () => {
+      if (!retry.hidden) start(0);
+    };
+    window.addEventListener('online', onOnline);
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      showOffline();
+    } else {
+      start(0);
+    }
 
     return {
       destroy() {
         dead = true;
+        window.removeEventListener('online', onOnline);
         clearWatchdog();
         stopLayer();
         badge.remove();
         control.remove();
-        const overlay = container.querySelector('.map-offline');
-        if (overlay) overlay.remove();
       },
     };
   }
@@ -213,6 +356,7 @@ window.T = window.T || {};
       worldCopyJump: true,
     });
     const base = attachStreetBase(map, el);
+    const local = addLocalBasemap(map, el);
     map.setView(options.center || [4.5, 10], options.zoom || 5);
 
     const instance = {
@@ -298,6 +442,7 @@ window.T = window.T || {};
         setTimeout(() => map.invalidateSize(), 60);
       },
       destroy() {
+        if (local) local.destroy();
         if (base) base.destroy();
         map.remove();
       },

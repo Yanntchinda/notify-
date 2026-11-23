@@ -74,7 +74,7 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 | Persistance | Fichier JSON (`data/db.json`) avec écriture atomique — adapté à un prototype, à remplacer par PostgreSQL/MySQL en production |
 | Authentification | Sessions par cookie HTTP-only, mots de passe hachés avec `scrypt` |
 | Frontend | HTML/CSS/JavaScript vanilla, SPA par hash routing |
-| Carte | Leaflet + **plan de rues gratuit** (Esri World Street Map par défaut, OpenStreetMap et CARTO Voyager au choix), sans clé d'API |
+| Carte | Leaflet + **plan embarqué** (Natural Earth, servi par l'application) + plan de rues gratuit en superposition (Esri World Street Map par défaut, OpenStreetMap et CARTO Voyager au choix), sans clé d'API |
 | Géocodage | Nominatim (OpenStreetMap) |
 | Itinéraire | OSRM Public Demo Server (`router.project-osrm.org`) |
 | E-mails | Nodemailer (facultatif, via SMTP) |
@@ -84,13 +84,15 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 
 Le cahier des charges proposait Google Maps Platform (payant à l'usage) ou Leaflet + OpenStreetMap + service d'itinéraire libre. Le choix libre a été retenu pour le prototype : aucune clé API, aucun coût, et les mêmes fonctionnalités (carte, marqueurs, polyline, géocodage, distance routière). En production, il est recommandé d'héberger son propre serveur OSRM ou d'utiliser un fournisseur avec SLA, car les serveurs publics de démonstration sont limités.
 
-### Plan de rues et secours automatique
+### Plan embarqué et plan de rues
 
-Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affichent un **plan de rues gratuit** : Esri World Street Map par défaut (routes, villes et frontières lisibles dès les petits zooms), avec OpenStreetMap et CARTO Voyager disponibles.
+Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affichent d'abord un **plan embarqué** : les continents, les frontières de 177 pays, 47 villes et leurs libellés sont servis par l'application elle-même (`public/data/`, données Natural Earth du domaine public, 163 Ko). La carte s'affiche donc **même sans accès aux serveurs de tuiles**, et instantanément.
+
+Par-dessus, un **plan de rues gratuit** se charge dès que le réseau le permet : Esri World Street Map par défaut (routes, villes et frontières lisibles dès les petits zooms), avec OpenStreetMap et CARTO Voyager disponibles.
 
 - **Sélecteur de fond** en haut à droite de chaque carte : « Plan de rues », « OpenStreetMap », « Voyager ». Le choix est mémorisé sur l'appareil et repris sur toutes les pages.
 - **Secours automatique** : si le fournisseur ne répond pas (tuiles en erreur, réseau bloqué, timeout de 12 s), le fond bascule sur le fournisseur suivant ; un badge en bas à gauche indique le plan réellement affiché.
-- **Aucun fournisseur joignable** : message explicite et bouton **Réessayer** à la place d'une zone grise.
+- **Aucun fournisseur joignable** : la carte reste utilisable grâce au plan embarqué ; le badge indique « Plan simplifié · hors ligne » et un lien **Réessayer** relance le chargement (ou automatiquement au retour du réseau).
 - Aucune clé d'API : seules les attributions sont affichées en bas de carte.
 
 ---
@@ -128,16 +130,19 @@ public/
   css/styles.css  Design mobile-first
   js/api.js       Client HTTP
   js/ui.js        Composants, icônes, statuts, modales, toasts
-  js/map.js       Leaflet, géocodage, itinéraire, distance
+  js/map.js       Leaflet, plan embarqué, géocodage, itinéraire, distance
   js/app.js       Routes, pages publiques, compte client, administration
+  data/           Plan embarqué Natural Earth (continents, pays, villes)
   img/            Visuels du slider, conteneurs, icônes PWA
   vendor/leaflet/ Leaflet servi localement
+  vendor/topojson/  Décodeur TopoJSON du plan embarqué
   sw.js           Service worker
 scripts/
   api-test.js     Test d'intégration API
   e2e-ui.js       Test de bout en bout (jsdom, GPS simulé)
   smoke-test.js   Test de chargement des pages
   backup.js       Sauvegarde horodatée de la base
+  build-basemap.js  Régénère public/data/ depuis world-atlas
   generate_icons.py  Génération des icônes PWA
 data/db.json      Base de démonstration (ignorée par Git)
 ```
