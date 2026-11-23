@@ -74,7 +74,7 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 | Persistance | Fichier JSON (`data/db.json`) avec écriture atomique — adapté à un prototype, à remplacer par PostgreSQL/MySQL en production |
 | Authentification | Sessions par cookie HTTP-only, mots de passe hachés avec `scrypt` |
 | Frontend | HTML/CSS/JavaScript vanilla, SPA par hash routing |
-| Carte | Leaflet + **plan embarqué** (Natural Earth, servi par l'application) + plan de rues **OpenStreetMap** gratuit en superposition (CARTO Voyager au choix), sans clé d'API |
+| Carte | Leaflet + **plan embarqué** (Natural Earth) + plan détaillé gratuit automatiquement sélectionné parmi 6 fournisseurs (OpenStreetMap, OSM France, CARTO Voyager, Esri World Street Map, Wikimedia, imagerie Esri) |
 | Géocodage | Nominatim (OpenStreetMap) |
 | Itinéraire | OSRM Public Demo Server (`router.project-osrm.org`) |
 | E-mails | Nodemailer (facultatif, via SMTP) |
@@ -88,9 +88,9 @@ Le cahier des charges proposait Google Maps Platform (payant à l'usage) ou Leaf
 
 Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affichent d'abord un **plan embarqué** : les continents, les frontières des 177 pays **avec leurs noms en français**, 47 villes et leurs libellés sont servis par l'application elle-même (`public/data/`, données Natural Earth du domaine public, 163 Ko). La carte s'affiche donc **même sans accès aux serveurs de tuiles**, et instantanément.
 
-Par-dessus, le **plan de rues OpenStreetMap** (gratuit, sans clé) se charge dès que le réseau le permet ; CARTO Voyager est disponible en variante via le sélecteur de fond.
+Par-dessus, l'application cherche **le premier plan détaillé réellement joignable** parmi six fournisseurs gratuits : OpenStreetMap, OSM France, CARTO Voyager, Esri World Street Map, Wikimedia Maps, et l'imagerie satellite Esri. Chaque fournisseur est testé par **une seule tuile-sonde** ; le premier qui répond est retenu et mémorisé. Si un réseau bloque OpenStreetMap mais pas CARTO (ou l'inverse), la carte détaillée s'affiche quand même.
 
-- **Sélecteur de fond** en haut à droite de chaque carte : « Plan embarqué » (par défaut, aucune requête réseau), « OpenStreetMap » et « Voyager ». Le choix est mémorisé sur l'appareil et repris sur toutes les pages.
+- **Sélecteur de fond** en haut à droite de chaque carte : « Plan embarqué », « Plan de rues », « Satellite ». Le choix est mémorisé sur l'appareil et repris sur toutes les pages.
 - **Aucune erreur 403** : dans un aperçu intégré (iframe) ou après un premier échec, l'application ne tente plus aucun chargement de tuiles. Avant d'activer un fond détaillé, une **sonde unique** vérifie qu'une tuile est réellement accessible ; si elle échoue, aucun autre appel n'est émis.
 - **Secours automatique** : si le fournisseur ne répond pas (tuiles en erreur, réseau bloqué, timeout de 12 s), le fond bascule sur le fournisseur suivant puis sur le plan embarqué ; un badge en bas à gauche indique le plan réellement affiché.
 - **Aucun fournisseur joignable** : la carte reste utilisable grâce au plan embarqué ; le badge indique « Plan simplifié · hors ligne » et un lien **Réessayer** relance le chargement (ou automatiquement au retour du réseau).

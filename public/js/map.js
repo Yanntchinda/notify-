@@ -5,18 +5,13 @@ window.T = window.T || {};
 (function () {
   const instances = new Set();
 
-  /* Fonds de plan de rues gratuits, du plan de rues classique aux variantes.
-     Aucune clé d’API : chaque fournisseur ne demande que l’attribution. */
-  const BASE_LAYERS = [
-    {
-      id: 'local',
-      label: 'Plan embarqué',
-      name: 'Plan embarqué (Natural Earth)',
-      local: true,
-    },
+  /* Fonds de plan détaillés gratuits. Chaque fournisseur est testé par une sonde
+     (une seule tuile) : on retient le premier réellement joignable, car certains
+     réseaux bloquent les uns et pas les autres. Aucune clé d'API. */
+  const STREET_PROVIDERS = [
     {
       id: 'osm',
-      label: 'Plan de rues',
+      label: 'OpenStreetMap',
       name: 'OpenStreetMap',
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       options: { subdomains: 'abc', maxZoom: 19 },
@@ -24,27 +19,115 @@ window.T = window.T || {};
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributeurs',
     },
     {
+      id: 'osmfr',
+      label: 'OSM France',
+      name: 'OpenStreetMap France',
+      url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+      options: { subdomains: 'abc', maxZoom: 20 },
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://www.openstreetmap.fr/">OSM France</a>',
+    },
+    {
       id: 'carto',
-      label: 'Voyager',
+      label: 'CARTO Voyager',
       name: 'CARTO Voyager',
       url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       options: { subdomains: 'abcd', maxZoom: 19 },
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
     },
+    {
+      id: 'esri',
+      label: 'Esri World Street Map',
+      name: 'Esri World Street Map',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      options: { maxZoom: 19 },
+      attribution: 'Fond de plan &copy; <a href="https://www.esri.com/">Esri</a>',
+    },
+    {
+      id: 'wikimedia',
+      label: 'Wikimedia',
+      name: 'Wikimedia Maps',
+      url: 'https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png',
+      options: { maxZoom: 19 },
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://wikimediafoundation.org/">Wikimedia</a>',
+    },
+  ];
+
+  const SATELLITE_PROVIDER = {
+    id: 'satellite',
+    label: 'Satellite',
+    name: 'Esri World Imagery',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    options: { maxZoom: 19 },
+    attribution: 'Imagerie &copy; <a href="https://www.esri.com/">Esri</a>',
+  };
+
+  const BASE_MODES = [
+    { id: 'local', label: 'Plan embarqué', name: 'Plan embarqué (Natural Earth)' },
+    { id: 'streets', label: 'Plan de rues', name: 'Plan de rues détaillé' },
+    { id: 'satellite', label: 'Satellite', name: 'Vue satellite' },
   ];
 
   const BASE_STORAGE_KEY = 'transit_basemap';
+  const BLOCKED_KEY = 'transit_tiles_blocked';
   const TILE_ERROR_LIMIT = 6;
   const TILE_TIMEOUT_MS = 12000;
 
-  function preferredBaseId() {
+  function storedMode() {
+    let saved = null;
     try {
-      const saved = localStorage.getItem(BASE_STORAGE_KEY);
-      return BASE_LAYERS.some((item) => item.id === saved) ? saved : null;
+      saved = localStorage.getItem(BASE_STORAGE_KEY);
     } catch (err) {
       return null;
     }
+    if (BASE_MODES.some((mode) => mode.id === saved)) return saved;
+    /* anciens identifiants de fournisseur */
+    if (saved === 'osm' || saved === 'carto' || saved === 'esri' || saved === 'osmfr' || saved === 'wikimedia') {
+      return 'streets';
+    }
+    return null;
+  }
+
+  function providerFor(mode, id) {
+    if (mode === 'satellite') return SATELLITE_PROVIDER;
+    return STREET_PROVIDERS.find((item) => item.id === id) || null;
+  }
+
+  function probeUrl(provider) {
+    const url = provider.url.replace('{s}', 'a').replace('{r}', '');
+    const zoom = 3;
+    const x = 4;
+    const y = 2;
+    return url.replace('{z}', zoom).replace('{x}', x).replace('{y}', y);
+  }
+
+  /* Une seule requête par fournisseur : si le réseau la bloque, on ne tente
+     jamais de charger la moindre tuile de ce fournisseur. */
+  function probeProvider(provider) {
+    return new Promise((resolve) => {
+      let done = false;
+      let timer = null;
+      const finish = (value) => {
+        if (done) return;
+        done = true;
+        if (timer) clearTimeout(timer);
+        resolve(value);
+      };
+      const image = new Image();
+      timer = setTimeout(() => finish(false), 6000);
+      image.onload = () => finish(true);
+      image.onerror = () => finish(false);
+      image.src = probeUrl(provider);
+    });
+  }
+
+  async function resolveProvider(mode) {
+    const list = mode === 'satellite' ? [SATELLITE_PROVIDER] : STREET_PROVIDERS;
+    const results = await Promise.all(list.map((item) => probeProvider(item)));
+    const index = results.findIndex(Boolean);
+    return index >= 0 ? list[index] : null;
   }
 
   function markerColor(role) {
@@ -257,66 +340,13 @@ window.T = window.T || {};
     };
   }
 
-  function buildChain(preferredId) {
-    const preferred = BASE_LAYERS.findIndex((item) => item.id === preferredId);
-    if (preferred < 0) return BASE_LAYERS.slice();
-    return [BASE_LAYERS[preferred], ...BASE_LAYERS.filter((item) => item.id !== preferredId)];
-  }
-
-  /* Sonde une seule tuile avant d’activer un fond externe : si le serveur est
-     bloqué (403, proxy, pare-feu), on ne lance aucune requête de tuiles. */
-  function probeTile(url) {
-    return new Promise((resolve) => {
-      let done = false;
-      let timer = null;
-      const finish = (value) => {
-        if (done) return;
-        done = true;
-        if (timer) clearTimeout(timer);
-        resolve(value);
-      };
-      const image = new Image();
-      timer = setTimeout(() => finish(false), 6000);
-      image.onload = () => finish(true);
-      image.onerror = () => finish(false);
-      image.src = url;
-    });
-  }
-
-  function probeUrlFor(def) {
-    if (def.id === 'carto') return 'https://a.basemaps.cartocdn.com/rastertiles/voyager/3/4/2.png';
-    return 'https://a.tile.openstreetmap.org/3/4/2.png';
-  }
-
-  function tilesAllowed() {
-    try {
-      /* Dans un aperçu intégré (iframe), les tuiles externes sont souvent
-         interdites : on reste sur le plan embarqué, sans aucune requête. */
-      if (window.self !== window.top) return false;
-      if (sessionStorage.getItem('transit_tiles_blocked')) return false;
-    } catch (err) {
-      return false;
-    }
-    return true;
-  }
-
-  function buildChain(preferredId) {
-    const local = BASE_LAYERS.find((item) => item.local);
-    const raster = BASE_LAYERS.filter((item) => !item.local);
-    if (preferredId === 'local') return [local];
-    const preferred = raster.find((item) => item.id === preferredId);
-    const order = preferred ? [preferred, ...raster.filter((item) => item !== preferred)] : raster;
-    if (!preferred && !tilesAllowed()) return [local];
-    return [...order, local];
-  }
-
   function attachStreetBase(map, container) {
     let layer = null;
+    let mode = 'streets';
+    let generation = 0;
+    let watchdog = null;
     let dead = false;
     let destroyed = false;
-    let watchdog = null;
-    let chain = buildChain(preferredBaseId());
-    let pos = 0;
 
     const badge = document.createElement('div');
     badge.className = 'map-source';
@@ -331,9 +361,9 @@ window.T = window.T || {};
     control.className = 'map-basemap';
     control.setAttribute('role', 'group');
     control.setAttribute('aria-label', 'Fond de carte');
-    control.innerHTML = BASE_LAYERS.map(
+    control.innerHTML = BASE_MODES.map(
       (item) =>
-        `<button type="button" data-base="${item.id}" title="${item.name} — gratuit" aria-pressed="false">${item.label}</button>`
+        `<button type="button" data-base="${item.id}" title="${item.name}" aria-pressed="false">${item.label}</button>`
     ).join('');
     container.appendChild(control);
 
@@ -369,22 +399,15 @@ window.T = window.T || {};
       layer = null;
     }
 
-    function markBlocked() {
-      setLabel('Plan détaillé indisponible — plan embarqué affiché');
+    function blocked(message) {
+      dead = true;
+      setLabel(message || 'Plan détaillé indisponible — plan embarqué affiché');
       badge.classList.add('is-offline');
       retry.hidden = false;
       try {
-        sessionStorage.setItem('transit_tiles_blocked', '1');
+        sessionStorage.setItem(BLOCKED_KEY, '1');
       } catch (err) {
         /* stockage indisponible */
-      }
-    }
-
-    function advance() {
-      if (pos + 1 < chain.length) start(pos + 1);
-      else {
-        dead = true;
-        markBlocked();
       }
     }
 
@@ -407,7 +430,7 @@ window.T = window.T || {};
         errors += 1;
         if (errors < TILE_ERROR_LIMIT) return;
         stopLayer();
-        advance();
+        blocked('Plan détaillé interrompu — plan embarqué affiché');
       });
 
       current.addTo(map);
@@ -417,85 +440,91 @@ window.T = window.T || {};
         watchdog = null;
         if (!active() || loaded > 0 || dead) return;
         stopLayer();
-        advance();
+        blocked('Plan détaillé interrompu — plan embarqué affiché');
       }, TILE_TIMEOUT_MS);
     }
 
-    function start(nextPos) {
+    async function apply(nextMode) {
+      const gen = ++generation;
       clearWatchdog();
       stopLayer();
       dead = false;
-      pos = nextPos;
-      const def = chain[pos];
-      syncControl(def.id);
+      mode = nextMode;
+      syncControl(nextMode);
+      try {
+        localStorage.setItem(BASE_STORAGE_KEY, nextMode);
+      } catch (err) {
+        /* stockage indisponible (navigation privée) */
+      }
 
-      if (def.local) {
-        if (pos > 0) {
-          /* Tous les plans détaillés ont échoué : on reste sur le plan embarqué
-             et on l’explique, sans laisser la carte vide. */
-          dead = true;
-          markBlocked();
-        } else {
-          markOnline();
-          setLabel('Plan embarqué · Natural Earth');
-        }
+      if (nextMode === 'local') {
+        markOnline();
+        setLabel('Plan embarqué · Natural Earth');
         return;
       }
 
-      setLabel(`Plan de rues · ${def.name}`);
-      probeTile(probeUrlFor(def)).then((available) => {
-        if (destroyed || dead) return;
-        if (!available) {
-          advance();
-          return;
-        }
-        addTiles(def);
-      });
+      setLabel(nextMode === 'satellite' ? 'Satellite · recherche…' : 'Plan de rues · recherche…');
+      const found = await resolveProvider(nextMode);
+      if (gen !== generation || destroyed) return;
+      if (!found) {
+        blocked();
+        return;
+      }
+      setLabel(`${nextMode === 'satellite' ? 'Satellite' : 'Plan de rues'} · ${found.name}`);
+      addTiles(found);
     }
 
     control.addEventListener('click', (event) => {
       const button = event.target.closest('button[data-base]');
       if (!button) return;
-      const id = button.dataset.base;
-      if (chain[pos] && chain[pos].id === id) return;
-      chain = buildChain(id);
+      const next = button.dataset.base;
+      if (next === mode && !badge.classList.contains('is-offline')) return;
       try {
-        localStorage.setItem(BASE_STORAGE_KEY, id);
+        sessionStorage.removeItem(BLOCKED_KEY);
       } catch (err) {
-        /* stockage indisponible (navigation privée) */
+        /* noop */
       }
-      start(0);
+      apply(next);
     });
 
     retry.addEventListener('click', () => {
       try {
-        sessionStorage.removeItem('transit_tiles_blocked');
+        sessionStorage.removeItem(BLOCKED_KEY);
       } catch (err) {
         /* noop */
       }
-      chain = buildChain('osm');
-      start(0);
+      apply(mode === 'local' ? 'streets' : mode);
     });
 
     const onOnline = () => {
       if (!retry.hidden) {
         try {
-          sessionStorage.removeItem('transit_tiles_blocked');
+          sessionStorage.removeItem(BLOCKED_KEY);
         } catch (err) {
           /* noop */
         }
-        chain = buildChain('osm');
-        start(0);
+        apply(mode === 'local' ? 'streets' : mode);
       }
     };
     window.addEventListener('online', onOnline);
 
-    start(0);
+    let initial = storedMode();
+    if (!initial) {
+      let blockedBefore = false;
+      try {
+        blockedBefore = sessionStorage.getItem(BLOCKED_KEY) === '1';
+      } catch (err) {
+        blockedBefore = false;
+      }
+      initial = blockedBefore ? 'local' : 'streets';
+    }
+    apply(initial);
 
     return {
       destroy() {
         destroyed = true;
         dead = true;
+        generation += 1;
         window.removeEventListener('online', onOnline);
         clearWatchdog();
         stopLayer();
