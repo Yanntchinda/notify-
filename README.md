@@ -165,9 +165,12 @@ data/db.json      Base de démonstration (ignorée par Git)
 Démarrer le serveur puis :
 
 ```bash
-npm run test:api   # 53 assertions sur l'API (auth, cotations, admin, sécurité)
-npm run test:e2e   # parcours UI avec géocodage/itinéraire simulés
+npm run test:supabase  # 24 vérifications : toute l'application sur Supabase (mock PostgREST)
+npm run test:api       # 54 assertions sur l'API Node (développement)
+npm run test:e2e       # parcours UI avec géocodage/itinéraire simulés
 ```
+
+`test:supabase` n'a besoin d'aucun projet Supabase : un serveur local imite PostgREST et l'authentification.
 
 Les tests créent des données de démonstration. Pour retrouver un état propre :
 
@@ -202,15 +205,18 @@ Sur un réseau d'entreprise, un campus ou un pays qui filtre ces domaines, deux 
 
 L'application est empaquetée avec **Capacitor** : l'APK ouvre l'application dans un WebView natif, plein écran, avec son icône et son écran de démarrage. La géolocalisation (« Me localiser ») est autorisée par le manifeste Android.
 
-**Prérequis** : l'application doit être déployée et accessible en **HTTPS** (l'APK pointe vers cette adresse). Sans serveur, l'APK affiche la coquille locale sans API.
+**Prérequis** : un projet Supabase configuré (voir « Hébergement » ci-dessus). L'APK contient l'interface complète et parle directement à Supabase — **aucun serveur, aucun domaine** n'est nécessaire pour l'application installée.
 
 #### Construire l'APK automatiquement (GitHub Actions)
 
-1. Ouvrir `.github/workflows/android.yml` et remplacer `PUBLIC_APP_URL` par l'adresse de votre application :
+1. Ouvrir `.github/workflows/android.yml` et renseigner les trois variables (Project Settings → API pour les deux premières) :
    ```yaml
    env:
-     PUBLIC_APP_URL: https://transit.votre-domaine.com
+     SUPABASE_URL: https://votre-projet.supabase.co
+     SUPABASE_ANON_KEY: eyJhbGciOi...
+     PUBLIC_APP_URL: https://votre-site.com   # liens de réinitialisation du mot de passe
    ```
+   La clé `anon` est **publique par conception** : elle ne donne que les droits définis par les politiques RLS.
 2. Pousser le code : `git push`. Aller dans l'onglet **Actions** du dépôt GitHub.
 3. Choisir **Android APK** → **Run workflow** (ou pousser un tag `v1.0.0`).
 4. À la fin du travail, télécharger l'artefact **transit-apk** (≈ 10 Mo) :
@@ -219,13 +225,15 @@ L'application est empaquetée avec **Capacitor** : l'APK ouvre l'application dan
 
    Lien direct : onglet **Actions** → dernière exécution **Android APK** → **Artifacts** → `transit-apk`.
 
-> ⚠️ L'APK ouvre l'adresse `PUBLIC_APP_URL` : tant que cette variable n'est pas remplacée par votre domaine, l'application installée affiche une erreur de connexion. Modifiez la variable, poussez, puis téléchargez le nouvel artefact.
+> ⚠️ Tant que `SUPABASE_URL` et `SUPABASE_ANON_KEY` ne sont pas renseignées, l'application installée affiche « Base de données non configurée ». Modifiez les variables, poussez, puis téléchargez le nouvel artefact.
 
 #### Construire l'APK sur sa machine
 
 ```bash
 npm ci
-PUBLIC_APP_URL=https://transit.votre-domaine.com npm run build:android
+SUPABASE_URL=https://votre-projet.supabase.co \
+SUPABASE_ANON_KEY=eyJhbGciOi... \
+PUBLIC_APP_URL=https://votre-site.com npm run build:android
 cd android && ./gradlew assembleDebug
 ```
 
@@ -275,6 +283,10 @@ npx supabase functions deploy notify
 
 Puis **Database → Webhooks** : table `quotes`, événement *Insert*, URL `https://VOTRE-PROJET.supabase.co/functions/v1/notify`.
 
+> Le domaine d'envoi doit être vérifié dans Resend (Domaines → Ajouter). Avec l'expéditeur de test `onboarding@resend.dev`, Resend n'envoie qu'à l'adresse de votre compte Resend.
+>
+> Chaque e-mail reçu contient le numéro, le type de demande, le nom, l'e-mail et le téléphone du client, plus un lien direct vers la demande. Le bouton **Répondre** de votre messagerie écrit au client (`reply_to` = son adresse).
+
 #### Site web
 
 Pousser le dépôt et activer **GitHub Pages** (branche `main`, dossier `/docs` ou à la racine) — ou déposer `public/` sur Netlify. Aucun backend à déployer.
@@ -297,7 +309,7 @@ https://github.com/Yanntchinda/notify-/actions/workflows/ios.yml
 
 Sur un Mac, pour installer sur votre iPhone avec un compte Apple ID gratuit :
 ```bash
-PUBLIC_APP_URL=https://votre-domaine.com npm run build:ios
+SUPABASE_URL=https://votre-projet.supabase.co SUPABASE_ANON_KEY=eyJ... npm run build:ios
 npx cap open ios        # ouvre Xcode
 # Dans Xcode : Signing & Capabilities → votre équipe → Brancher l'iPhone → Run
 ```
@@ -306,8 +318,8 @@ npx cap open ios        # ouvre Xcode
 
 - **Aucun serveur applicatif** : fichiers statiques + Supabase. Le serveur Node (`npm start`) reste disponible pour le développement local et les tests, mais n'est plus nécessaire en production.
 - HTTPS obligatoire (géolocalisation, cookies sécurisés).
-- Mots de passe hachés avec `scrypt`, sessions HTTP-only, protection des routes administrateur.
-- Sauvegardes régulières recommandées : `npm run backup` (ou cron) puis copie hors serveur.
+- Mots de passe hachés par **Supabase Auth**, sessions JWT, chaque table protégée par des politiques **RLS** ; les visiteurs ne peuvent pas lire les demandes des autres (création via la fonction `submit_quote`).
+- Sauvegardes : Supabase conserve un historique des sauvegardes quotidiennes sur l'offre payante ; en offre gratuite, exportez depuis **Database → Backups** ou l'éditeur SQL.
 - En production : remplacer la persistance JSON par une base de données, ajouter une limitation de débit, un CSP adapté et un hébergement SMTP.
 - Les serveurs publics Nominatim/OSRM conviennent à la démonstration ; prévoir un hébergement dédié ou un fournisseur pour la production.
 

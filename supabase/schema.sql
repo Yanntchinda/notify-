@@ -119,8 +119,7 @@ create table if not exists public.quotes (
   payload jsonb not null default '{}'::jsonb,
   distance jsonb,
   user_id uuid references public.profiles(id) on delete set null,
-  price numeric(12, 2),
-  admin_response text,
+  admin_response jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -177,10 +176,69 @@ begin
 end;
 $$;
 
+
+-- ---------------------------------------------------------------------------
+-- Soumission d'une demande (visiteur ou client connecté)
+-- ---------------------------------------------------------------------------
+-- Fonction SECURITY DEFINER : elle valide les données côté base et retourne
+-- uniquement la ligne créée. Les visiteurs ne peuvent ainsi pas lire les
+-- demandes des autres (aucune politique SELECT anonyme sur public.quotes).
+create or replace function public.submit_quote(
+  p_type text,
+  p_contact jsonb,
+  p_payload jsonb,
+  p_distance jsonb default null
+)
+returns public.quotes
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := coalesce(p_contact->>'name', '');
+  v_email text := lower(coalesce(p_contact->>'email', ''));
+  v_phone text := coalesce(p_contact->>'phone', '');
+  v_row public.quotes;
+begin
+  if p_type is null or p_type not in ('roro', 'container', 'service') then
+    raise exception 'Type de demande invalide';
+  end if;
+  if btrim(v_name) = '' or length(v_name) > 80 then
+    raise exception 'Le nom est obligatoire (80 caractères maximum)';
+  end if;
+  if btrim(v_email) = '' and btrim(v_phone) = '' then
+    raise exception 'Indiquez un e-mail ou un numéro de téléphone';
+  end if;
+  if v_email <> '' and (position('@' in v_email) = 0 or position('.' in v_email) = 0) then
+    raise exception 'Adresse e-mail invalide';
+  end if;
+  if p_type = 'container' and coalesce(p_payload->>'containerId', '') = '' then
+    raise exception 'Sélectionnez un type de conteneur';
+  end if;
+  if p_type = 'service' and coalesce(p_payload->>'serviceId', '') = '' then
+    raise exception 'Sélectionnez un service';
+  end if;
+  if p_type = 'roro' and coalesce(p_payload->'vehicle'->>'brand', '')
+      || coalesce(p_payload->'vehicle'->>'model', '')
+      || coalesce(p_payload->'vehicle'->>'vin', '') = '' then
+    raise exception 'Renseignez au moins la marque, le modèle ou le châssis du véhicule';
+  end if;
+
+  insert into public.quotes (type, contact, payload, distance)
+  values (p_type, p_contact, p_payload, p_distance)
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+revoke all on function public.submit_quote(text, jsonb, jsonb, jsonb) from public;
+grant execute on function public.submit_quote(text, jsonb, jsonb, jsonb) to anon, authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Triggers
 -- ---------------------------------------------------------------------------
-
+--
 -- Profil créé automatiquement à l'inscription
 create or replace function public.handle_new_user()
 returns trigger
@@ -198,6 +256,20 @@ begin
     'client'
   )
   on conflict (id) do nothing;
+
+  -- Rattache à ce nouveau compte les demandes envoyées en visiteur
+  -- avec la même adresse e-mail ou le même numéro de téléphone.
+  update public.quotes
+     set user_id = new.id
+   where user_id is null
+     and (
+       (coalesce(new.email, '') <> '' and lower(contact->>'email') = lower(new.email))
+       or (
+         coalesce(new.raw_user_meta_data->>'phone', '') <> ''
+         and contact->>'phone' = new.raw_user_meta_data->>'phone'
+       )
+     );
+
   return new;
 end;
 $$;
@@ -217,7 +289,6 @@ as $$
 begin
   new.number := coalesce(new.number, public.next_quote_number(new.type));
   new.status := 'received';
-  new.price := null;
   new.admin_response := null;
   new.user_id := auth.uid();
   new.created_at := now();
@@ -336,17 +407,19 @@ create policy "container_refs insert" on public.container_refs
 create policy "container_refs delete" on public.container_refs
   for delete using (auth.uid() = user_id);
 
--- Demandes de cotation
-create policy "quotes insert" on public.quotes
-  for insert with check (true);
+-- Demandes de cotation : la création passe par public.submit_quote()
+-- (aucun INSERT direct, aucun SELECT anonyme → aucun accès aux coordonnées
+-- des autres visiteurs). Chaque client lit ses propres demandes.
 create policy "quotes select" on public.quotes
-  for select using (auth.uid() = user_id or public.is_admin() or user_id is null and auth.uid() is null);
+  for select using (auth.uid() = user_id or public.is_admin());
 create policy "quotes update admin" on public.quotes
   for update using (public.is_admin()) with check (public.is_admin());
 
 -- Notifications
 create policy "notifications select" on public.notifications
   for select using (auth.uid() = user_id or (user_id is null and public.is_admin()));
+create policy "notifications insert admin" on public.notifications
+  for insert with check (public.is_admin());
 create policy "notifications update" on public.notifications
   for update using (auth.uid() = user_id or public.is_admin())
   with check (auth.uid() = user_id or public.is_admin());

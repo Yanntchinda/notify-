@@ -1,0 +1,7 @@
+# Configuration Supabase CLI.
+# `npx supabase link --project-ref VOTRE-PROJET` remplace project_id automatiquement.
+
+project_id = "votre-projet"
+
+[functions.notify]
+enabled = true

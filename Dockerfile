@@ -1,3 +1,7 @@
+# Optionnel — serveur Node de développement local uniquement.
+# En production, l'application est statique et parle directement à Supabase
+# (voir README.md, section « Hébergement — plus de serveur »).
+
 FROM node:20-alpine
 
 WORKDIR /app

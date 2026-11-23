@@ -3,9 +3,8 @@
 window.T = window.T || {};
 
 T.api = {
-  /* Dans l'application Android (Capacitor), l'interface est servie localement et
-     l'API reste sur le serveur : l'URL de base est injectée au moment du build
-     (scripts/build-android.js) et vaut '' sur le site web. */
+  /* Retour au serveur Node de développement quand aucune base Supabase n'est
+     configurée : l'URL de base vaut '' (même origine). */
   base() {
     return (typeof window !== 'undefined' && window.T_API_BASE) || '';
   },
@@ -26,13 +25,26 @@ T.api = {
     try {
       response = await fetch(target, options);
     } catch (err) {
-      throw new Error('Connexion impossible. Vérifiez votre accès à Internet.');
+      throw new Error(
+        window.APP_CONFIG
+          ? 'Base de données non configurée : renseignez supabaseUrl et supabaseAnonKey dans public/js/config.js.'
+          : 'Connexion impossible. Vérifiez votre accès à Internet.'
+      );
     }
     let data = null;
     try {
       data = await response.json();
     } catch (err) {
       data = null;
+    }
+    /* Un hébergement statique sans serveur Node renvoie la page HTML au lieu
+       d'une réponse JSON : on le signale clairement plutôt que d'afficher «Erreur 404». */
+    if (data === null && (response.status === 404 || response.status === 503)) {
+      throw new Error(
+        window.APP_CONFIG
+          ? 'Base de données non configurée : renseignez supabaseUrl et supabaseAnonKey dans public/js/config.js.'
+          : 'API indisponible. Lancez « npm start » ou configurez Supabase.'
+      );
     }
     if (!response.ok || (data && data.ok === false)) {
       const message = (data && data.message) || `Erreur ${response.status}`;

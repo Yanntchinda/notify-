@@ -15,7 +15,8 @@
     "build:map": "node scripts/build-basemap.js",
     "build:android": "node scripts/build-mobile.js android",
     "build:ios": "node scripts/build-mobile.js ios",
-    "build:seed-sql": "node scripts/build-supabase-seed.js"
+    "build:seed-sql": "node scripts/build-supabase-seed.js",
+    "test:supabase": "node scripts/test-supabase.js"
   },
   "engines": {
     "node": ">=20"

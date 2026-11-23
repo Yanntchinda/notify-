@@ -97,7 +97,7 @@ window.T = window.T || {};
   const toQuote = (r) => ({
     id: r.id, number: r.number, type: r.type, status: r.status,
     contact: r.contact || {}, payload: r.payload || {}, distance: r.distance || null,
-    userId: r.user_id || null, price: r.price == null ? null : Number(r.price),
+    userId: r.user_id || null,
     adminResponse: r.admin_response || null,
     createdAt: r.created_at, updatedAt: r.updated_at,
   });
@@ -206,9 +206,13 @@ window.T = window.T || {};
     const user = data.user;
     if (!user) throw fail('Inscription impossible');
 
-    await sb().from('profiles').update({ name, phone }).eq('id', user.id);
-
-    const attached = await attachVisitorQuotes(user.id, email, phone);
+    /* Sans session (confirmation par e-mail activée), cette mise à jour est
+       refusée par RLS : le trigger de création a déjà inscrit nom et téléphone. */
+    try {
+      await sb().from('profiles').update({ name, phone }).eq('id', user.id);
+    } catch (err) {
+      /* ignoré */
+    }
 
     /* Si la confirmation par e-mail est désactivée, une session est déjà ouverte.
        Sinon on tente une connexion directe (comptes de démonstration). */
@@ -216,20 +220,7 @@ window.T = window.T || {};
       const signed = await sb().auth.signInWithPassword({ email, password });
       if (signed.error) throw fail('Compte créé. Confirmez votre adresse e-mail pour vous connecter.');
     }
-    return { ok: true, user: await publicUser(user.id), attachedQuotes: attached };
-  }
-
-  async function attachVisitorQuotes(userId, email, phone) {
-    if (!email && !phone) return [];
-    let query = sb().from('quotes').select('id').is('user_id', null);
-    if (email && phone) query = query.or(`contact->>email.eq.${email},contact->>phone.eq.${phone}`);
-    else if (email) query = query.eq('contact->>email', email);
-    else query = query.eq('contact->>phone', phone);
-    const found = unwrap(await query, 'Rattachement impossible');
-    if (!found.length) return [];
-    const ids = found.map((row) => row.id);
-    unwrap(await sb().from('quotes').update({ user_id: userId }).in('id', ids), 'Rattachement impossible');
-    return ids;
+    return { ok: true, user: await publicUser(user.id) };
   }
 
   async function login(body) {
@@ -239,8 +230,14 @@ window.T = window.T || {};
     const { data, error } = await sb().auth.signInWithPassword({ email, password });
     if (error) throw fail('Identifiants incorrects', 401);
     const user = await publicUser(data.user.id);
-    if (!user) throw fail('Compte introuvable', 404);
-    if (!user.active) throw fail('Ce compte est désactivé', 403);
+    if (!user) {
+      await sb().auth.signOut();
+      throw fail('Compte introuvable', 404);
+    }
+    if (!user.active) {
+      await sb().auth.signOut();
+      throw fail('Ce compte est désactivé', 403);
+    }
     return { ok: true, user };
   }
 
@@ -290,17 +287,19 @@ window.T = window.T || {};
       }
     }
 
-    const row = {
-      type,
-      contact: cleanContact,
-      payload,
-      distance,
-    };
+    /* Fonction SECURITY DEFINER : valide les données et retourne la demande
+       créée. Aucun accès en lecture aux demandes des autres visiteurs. */
     const inserted = unwrap(
-      await sb().from('quotes').insert(row).select('*').single(),
+      await sb().rpc('submit_quote', {
+        p_type: type,
+        p_contact: cleanContact,
+        p_payload: payload,
+        p_distance: distance,
+      }),
       'Enregistrement de la demande impossible'
     );
-    return { ok: true, number: inserted.number, quote: toQuote(inserted) };
+    const quote = toQuote(Array.isArray(inserted) ? inserted[0] : inserted);
+    return { ok: true, number: quote.number, quote };
   }
 
   /* ------------------------------ Routeur ------------------------------ */
@@ -446,18 +445,25 @@ window.T = window.T || {};
     if (method === 'POST' && route('/api/quotes/:id/respond')) {
       await requireAdmin();
       const params = route('/api/quotes/:id/respond');
+      const status = ['received', 'processing', 'quoted', 'accepted', 'refused'].includes((body || {}).status)
+        ? (body || {}).status
+        : 'quoted';
       const row = unwrap(
         await sb().from('quotes')
           .update({
-            price: (body || {}).price === '' || (body || {}).price == null ? null : Number((body || {}).price),
-            admin_response: String((body || {}).adminResponse || '').slice(0, 4000),
-            status: 'quoted',
+            admin_response: {
+              price: String((body || {}).price || '').slice(0, 120),
+              message: String((body || {}).message || '').slice(0, 2000),
+              respondedAt: new Date().toISOString(),
+            },
+            status,
           })
           .eq('id', params.id)
           .select('*')
           .single(),
         'Réponse impossible'
       );
+      await notifyClient(row, status === 'quoted' ? 'Votre cotation est disponible.' : 'Statut mis à jour', 'quote_response');
       return { ok: true, quote: toQuote(row) };
     }
     if (method === 'PATCH' && route('/api/quotes/:id/status')) {
@@ -469,6 +475,9 @@ window.T = window.T || {};
         await sb().from('quotes').update({ status }).eq('id', params.id).select('*').single(),
         'Mise à jour impossible'
       );
+      if (status !== 'received') {
+        await notifyClient(row, '', 'quote_status');
+      }
       return { ok: true, quote: toQuote(row) };
     }
 
@@ -479,6 +488,32 @@ window.T = window.T || {};
     }
 
     throw fail('Route API introuvable', 404);
+  }
+
+  const STATUS_LABELS = {
+    received: 'reçue',
+    processing: 'en cours',
+    quoted: 'cotée',
+    accepted: 'acceptée',
+    refused: 'refusée',
+  };
+
+  async function notifyClient(quoteRow, message, kind) {
+    if (!quoteRow || !quoteRow.user_id) return;
+    const title = kind === 'quote_status'
+      ? `Votre demande ${quoteRow.number} est : ${STATUS_LABELS[quoteRow.status] || quoteRow.status}`
+      : `Réponse à votre demande ${quoteRow.number}`;
+    try {
+      await sb().from('notifications').insert({
+        user_id: quoteRow.user_id,
+        kind,
+        title,
+        message,
+        quote_id: quoteRow.id,
+      });
+    } catch (err) {
+      /* la réponse est enregistrée même si la notification échoue */
+    }
   }
 
   /* --------------------------- Routes admin ---------------------------- */
