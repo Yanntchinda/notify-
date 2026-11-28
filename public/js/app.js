@@ -38,9 +38,7 @@
     })(),
     lastQuote: null,
     prefillVehicle: null,
-    prefillContainer: null,
     roro: null,
-    container: null,
     adminSection: 'dashboard',
     adminFilters: { type: '', status: '', q: '', from: '', to: '' },
     adminUnread: 0,
@@ -138,10 +136,8 @@
       clearInterval(state.sliderTimer);
       state.sliderTimer = null;
     }
-    T.map.destroyAll();
     closeModal();
     state.roroWidget = null;
-    state.containerWidget = null;
   }
 
   /* -------------------------------- Shell -------------------------------- */
@@ -151,7 +147,7 @@
     return `<header class="topbar">
       <a class="brand" href="#/home" aria-label="Transit — accueil">
         <span class="brand-mark">${icon('ship', 22)}</span>
-        <span class="brand-name">TRANSIT<small>Ro-Ro &amp; conteneurs</small></span>
+        <span class="brand-name">TRANSIT<small>Ro-Ro &amp; services</small></span>
       </a>
       <div class="topbar-actions">
         ${
@@ -175,7 +171,6 @@
     const items = [
       { id: 'home', label: 'Accueil', href: '#/home', icon: 'home' },
       { id: 'roro', label: 'Ro-Ro', href: '#/roro', icon: 'ship' },
-      { id: 'containers', label: 'Conteneurs', href: '#/containers', icon: 'container' },
       { id: 'services', label: 'Services', href: '#/services', icon: 'grid' },
     ];
     return `<nav class="bottomnav" aria-label="Navigation principale">
@@ -218,10 +213,10 @@
           <div class="login-hero-content">
             <div class="brand brand-light">
               <span class="brand-mark">${icon('ship', 24)}</span>
-              <span class="brand-name">TRANSIT<small>Ro-Ro &amp; conteneurs</small></span>
+              <span class="brand-name">TRANSIT<small>Ro-Ro &amp; services</small></span>
             </div>
             <h1>Votre véhicule,<br />du porte-à-porte<br />au port.</h1>
-            <p class="login-hero-text">Cotation Ro-Ro et conteneurs, sans création de compte obligatoire.</p>
+            <p class="login-hero-text">Cotation Ro-Ro, distance jusqu’au port et suivi de vos départs — sans création de compte obligatoire.</p>
             <ul class="hero-points">
               <li>${icon('check', 16)} Départs réguliers depuis l’Afrique</li>
               <li>${icon('check', 16)} Distance GPS jusqu’au port</li>
@@ -406,7 +401,7 @@
         <div class="auth-card">
           <div class="brand brand-center">
             <span class="brand-mark">${icon('ship', 26)}</span>
-            <span class="brand-name">TRANSIT<small>Ro-Ro &amp; conteneurs</small></span>
+            <span class="brand-name">TRANSIT<small>Ro-Ro &amp; services</small></span>
           </div>
           <h1>Nouveau mot de passe</h1>
           <p class="form-intro">Choisissez un nouveau mot de passe pour votre compte.</p>
@@ -447,22 +442,20 @@
   function renderHome() {
     const sliders = state.content.sliders || [];
     const departures = state.content.departures || [];
-    const containers = state.content.containers.slice(0, 3);
     const services = state.content.services.slice(0, 4);
     shell(
       `
-      <h1 class="sr-only">Transit — transport Ro-Ro et conteneurs</h1>
+      <h1 class="sr-only">Transit — transport maritime Ro-Ro</h1>
       ${sliders.length ? sliderHtml(sliders) : heroFallback()}
       ${departures.length ? departuresSection(departures) : ''}
-      ${mapSection()}
-      ${containerTeaser(containers)}
+      ${corridorSection()}
       ${servicesTeaser(services)}
       ${ctaBand()}
       `,
       { active: 'home' }
     );
     if (sliders.length) initSlider();
-    initHomeMap();
+    initHomeCorridor();
   }
 
   function heroFallback() {
@@ -470,7 +463,7 @@
       <div class="container">
         <p class="eyebrow">Transit international</p>
         <h1>Votre véhicule, du porte-à-porte au port.</h1>
-        <p>Cotation Ro-Ro et conteneurs, sans création de compte.</p>
+        <p>Cotation Ro-Ro, départs réguliers et distance jusqu’au port, sans création de compte.</p>
         <div class="slide-actions"><a class="btn btn-primary" href="#/roro">Demander une cotation</a></div>
       </div>
     </section>`;
@@ -491,7 +484,7 @@
               <p class="slide-sub">${esc(slider.sub)}</p>
               <div class="slide-actions">
                 <a class="btn btn-primary" href="#/roro">Demander une cotation</a>
-                <a class="btn btn-glass" href="#/containers">Conteneurs</a>
+                <a class="btn btn-glass" href="#/services">Nos services</a>
               </div>
             </div>
           </div>`
@@ -608,124 +601,173 @@
     </a>`;
   }
 
-  function mapSection() {
+  /* --------------------------- Couloir maritime -------------------------- */
+  /* À la place de la carte : un couloir de route dessiné en SVG à partir des
+     ports de l’application. Distance, durée de traversée et prochain départ
+     sont calculés localement — aucune tuile ni service extérieur. */
+
+  const SHIP_SPEED_KN = 15; /* vitesse commerciale moyenne, en nœuds */
+  const SEA_ROUTE_FACTOR = 1.12; /* la route réelle est plus longue que la ligne droite */
+
+  function corridorPorts(country, role) {
+    if (!state.content) return [];
+    return state.content.ports.filter((p) =>
+      role === 'loading' ? p.role !== 'discharge' && p.country === country : p.role !== 'loading' && p.country === country
+    );
+  }
+
+  function corridorDepartures(portsA, portsB) {
+    const idsA = new Set(portsA.map((p) => p.id));
+    const idsB = new Set(portsB.map((p) => p.id));
+    const today = new Date().toISOString().slice(0, 10);
+    return (state.content.departures || [])
+      .filter((d) => idsA.has(d.fromPortId) && idsB.has(d.toPortId) && d.departureDate >= today && d.status !== 'departed')
+      .sort((a, b) => String(a.departureDate).localeCompare(String(b.departureDate)));
+  }
+
+  function corridorPortHtml(portItem, role) {
+    return `<div class="corridor-port ${role === 'discharge' ? 'corridor-port-end' : ''}">
+      <span class="corridor-flag">${flag(portItem.countryCode)}</span>
+      <div class="corridor-port-text">
+        <span class="corridor-role">${role === 'loading' ? 'Chargement' : 'Déchargement'}</span>
+        <strong>${esc(portItem.city || portItem.name)}</strong>
+        <small>${esc(portItem.name)}</small>
+      </div>
+    </div>`;
+  }
+
+  function corridorPortChips(portsA, portsB) {
+    const chips = [...portsA, ...portsB]
+      .slice(0, 8)
+      .map((p) => `<span class="corridor-chip">${flag(p.countryCode)} ${esc(p.city || p.name)}</span>`)
+      .join('');
+    if (!chips) return '';
+    return `<div class="corridor-chips"><span class="corridor-chips-label">Ports du corridor</span>${chips}</div>`;
+  }
+
+  function corridorSvg() {
+    const path = 'M46 104 C 180 22 420 22 554 104';
+    return `<div class="corridor-arc">
+      <svg viewBox="0 0 600 130" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <path class="arc-track" d="${path}"></path>
+        <path class="arc-line" d="${path}"></path>
+        <circle class="arc-node" cx="46" cy="104" r="7"></circle>
+        <circle class="arc-node arc-node-end" cx="554" cy="104" r="7"></circle>
+        <g class="arc-ship">
+          <path d="M-14 -1 L14 -1 L9 8 L-9 8 Z"></path>
+          <path d="M-7 -1 L-7 -9 L7 -1 Z"></path>
+          <animateMotion path="${path}" dur="9s" rotate="auto" repeatCount="indefinite"></animateMotion>
+        </g>
+      </svg>
+    </div>`;
+  }
+
+  function corridorSection() {
     const loadingCountries = countriesForRole('loading');
     const dischargeCountries = countriesForRole('discharge');
     const from = loadingCountries.includes('Cameroun') ? 'Cameroun' : loadingCountries[0] || '';
     const to = dischargeCountries.includes('Belgique') ? 'Belgique' : dischargeCountries[0] || '';
-    return `<section class="section map-home-section">
-      <div class="container">
-        <div class="split-card">
-          <div class="split-card-text">
-            <p class="eyebrow">Carte &amp; trajets</p>
-            <h2>Choisissez votre pays de départ et d’arrivée</h2>
-            <p class="muted">La carte affiche les ports disponibles et le trajet maritime correspondant.</p>
-            <div class="route-selects">
-              <div class="field">
-                <label for="home-from">Pays de départ</label>
-                <select id="home-from">${countryOptions(loadingCountries, from)}</select>
-              </div>
-              <div class="field">
-                <label for="home-to">Pays d’arrivée</label>
-                <select id="home-to">${countryOptions(dischargeCountries, to)}</select>
-              </div>
-            </div>
-            <a id="home-quote-link" class="btn btn-primary" href="#/roro?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}">
-              Demander une cotation Ro-Ro ${icon('arrow-right', 18)}
-            </a>
-          </div>
-          <div class="split-card-map"><div id="home-map" class="map"></div></div>
-        </div>
-      </div>
-    </section>`;
-  }
-
-  function curvedRoute(from, to, segments = 64) {
-    const points = [];
-    const latDiff = to.lat - from.lat;
-    const lngDiff = to.lng - from.lng;
-    const arc = Math.min(6, Math.abs(latDiff) * 0.22 + Math.abs(lngDiff) * 0.12);
-    for (let i = 0; i <= segments; i += 1) {
-      const t = i / segments;
-      points.push([
-        from.lat + latDiff * t + Math.sin(Math.PI * t) * arc,
-        from.lng + lngDiff * t,
-      ]);
-    }
-    return points;
-  }
-
-  function initHomeMap() {
-    const mapEl = document.getElementById('home-map');
-    if (!mapEl) return;
-    const map = T.map.create(mapEl, { center: [7, 5], zoom: 4 });
-    if (!map) return;
-    const fromSelect = document.getElementById('home-from');
-    const toSelect = document.getElementById('home-to');
-    const link = document.getElementById('home-quote-link');
-
-    const update = () => {
-      const fromCountry = fromSelect.value;
-      const toCountry = toSelect.value;
-      const fromPorts = state.content.ports.filter((p) => p.role !== 'discharge' && p.country === fromCountry);
-      const toPorts = state.content.ports.filter((p) => p.role !== 'loading' && p.country === toCountry);
-      const fromPort = fromPorts[0];
-      const toPort = toPorts[0];
-      map.setPorts([...fromPorts, ...toPorts], false);
-      if (fromPort && toPort) {
-        map.setRoute(curvedRoute(fromPort, toPort), true);
-      } else {
-        map.setRoute(null);
-        map.fitAll();
-      }
-      if (link) {
-        link.href = `#/roro?from=${encodeURIComponent(fromCountry)}&to=${encodeURIComponent(toCountry)}`;
-      }
-    };
-
-    fromSelect.addEventListener('change', update);
-    toSelect.addEventListener('change', update);
-    update();
-    map.invalidate();
-  }
-
-  function containerTeaser(containers) {
-    return `<section class="section">
+    return `<section class="section corridor-section">
       <div class="container">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Conteneurs</p>
-            <h2>Achetez votre conteneur</h2>
+            <p class="eyebrow">Couloirs maritimes</p>
+            <h2>Choisissez votre trajet</h2>
+            <p class="muted">Distance de route, durée de traversée et prochain départ calculés pour le corridor sélectionné.</p>
           </div>
-          <a href="#/containers" class="link-arrow">Voir le catalogue ${icon('arrow-right', 16)}</a>
         </div>
-        <div class="container-grid">
-          ${containers.map((container) => containerCard(container, true)).join('')}
+        <div class="corridor-card">
+          <div class="corridor-form">
+            <div class="field">
+              <label for="home-from">Pays de départ</label>
+              <select id="home-from">${countryOptions(loadingCountries, from)}</select>
+            </div>
+            <div class="field">
+              <label for="home-to">Pays d’arrivée</label>
+              <select id="home-to">${countryOptions(dischargeCountries, to)}</select>
+            </div>
+            <a id="home-quote-link" class="btn btn-primary btn-block" href="#/roro?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}">
+              Demander une cotation Ro-Ro ${icon('arrow-right', 18)}
+            </a>
+          </div>
+          <div class="corridor-body" id="home-corridor" aria-live="polite"></div>
         </div>
       </div>
     </section>`;
   }
 
-  function containerCard(container, compact = false) {
-    return `<article class="container-card ${compact ? 'compact' : ''}">
-      <div class="container-img">
-        <img src="${esc(container.image)}" alt="${esc(container.name)}" loading="lazy" />
-        <span class="container-tag">${esc(container.shortName || '')}</span>
+  function corridorHtml(fromCountry, toCountry) {
+    const portsA = corridorPorts(fromCountry, 'loading');
+    const portsB = corridorPorts(toCountry, 'discharge');
+    const from = portsA[0];
+    const to = portsB[0];
+    if (!from || !to) {
+      return emptyState(
+        'route',
+        'Aucun couloir pour ce choix',
+        'Sélectionnez un autre pays de départ ou d’arrivée : les trajets disponibles dépendent des ports ouverts.'
+      );
+    }
+    const km = T.geo.haversine(from, to) * SEA_ROUTE_FACTOR;
+    const days = Math.max(1, Math.round(km / (SHIP_SPEED_KN * 1.852) / 24));
+    const departures = corridorDepartures(portsA, portsB);
+    const next = departures[0];
+    return `<div class="corridor-route">
+        ${corridorPortHtml(from, 'loading')}
+        ${corridorSvg()}
+        ${corridorPortHtml(to, 'discharge')}
       </div>
-      <div class="container-body">
-        <h3>${esc(container.name)}</h3>
-        ${compact ? `<p class="container-desc">${esc(container.description)}</p>` : `<p class="container-desc">${esc(container.description)}</p>
-        <dl class="specs">
-          <div><dt>Dimensions</dt><dd>${esc(container.dimensions)}</dd></div>
-          <div><dt>Volume</dt><dd>${esc(container.volume)}</dd></div>
-        </dl>`}
-        ${
-          compact
-            ? `<a class="btn btn-outline btn-block" href="#/containers?container=${encodeURIComponent(container.id)}">Demander un prix ${icon('arrow-right', 16)}</a>`
-            : `<button class="btn btn-primary btn-block" type="button" data-select-container="${esc(container.id)}">Demander un prix ${icon('arrow-right', 16)}</button>`
-        }
+      <p class="corridor-badge">${icon('ship', 16)} ≈ ${fmtNumber(km, 0)} km de route · ${days} jours de mer à ${SHIP_SPEED_KN} nœuds</p>
+      <ul class="corridor-stats">
+        <li><span>Distance</span><strong>${fmtNumber(km, 0)} km</strong></li>
+        <li><span>Traversée</span><strong>≈ ${days} j</strong></li>
+        <li><span>Ports actifs</span><strong>${portsA.length + portsB.length}</strong></li>
+        <li><span>Départs ouverts</span><strong>${departures.length}</strong></li>
+        <li><span>Prochain départ</span><strong>${next ? fmtDate(next.departureDate, false) : '—'}</strong>${
+          next ? `<small>${esc(next.ship)}</small>` : '<small>Sur demande</small>'
+        }</li>
+      </ul>
+      ${corridorPortChips(portsA, portsB)}`;
+  }
+
+  function initHomeCorridor() {
+    const root = document.getElementById('home-corridor');
+    const fromSelect = document.getElementById('home-from');
+    const toSelect = document.getElementById('home-to');
+    const link = document.getElementById('home-quote-link');
+    if (!root || !fromSelect || !toSelect) return;
+
+    const update = () => {
+      root.innerHTML = corridorHtml(fromSelect.value, toSelect.value);
+      if (link) link.href = `#/roro?from=${encodeURIComponent(fromSelect.value)}&to=${encodeURIComponent(toSelect.value)}`;
+    };
+
+    fromSelect.addEventListener('change', update);
+    if (toSelect) toSelect.addEventListener('change', update);
+    update();
+  }
+
+  /* ------------------------------ Route strip ---------------------------- */
+  /* Le petit tracé « votre ville → port » qui remplace la carte dans les formulaires. */
+
+  function routeStripHtml(from, to, km) {
+    const measured = Number.isFinite(km) && km > 0;
+    const start = from || { label: 'Votre position', sub: 'Position non renseignée', tone: 'idle' };
+    const end = to || { label: 'Port de chargement', sub: 'Sélectionnez un trajet', tone: 'idle' };
+    return `<div class="route-strip">
+      <div class="strip-end strip-${start.tone || 'ok'}">
+        <span class="strip-dot"></span>
+        <div><strong>${esc(start.label)}</strong><small>${esc(start.sub)}</small></div>
       </div>
-    </article>`;
+      <div class="strip-line${measured ? '' : ' strip-line-idle'}">
+        <span class="strip-line-fill"></span>
+        ${measured ? `<span class="strip-km">${fmtNumber(km, 0)} km</span>` : ''}
+      </div>
+      <div class="strip-end strip-${end.tone || 'port'} strip-end-right">
+        <span class="strip-dot"></span>
+        <div><strong>${esc(end.label)}</strong><small>${esc(end.sub)}</small></div>
+      </div>
+    </div>`;
   }
 
   function servicesTeaser(services) {
@@ -772,8 +814,6 @@
   /* --------------------------- Location widget --------------------------- */
 
   function createLocationWidget(cfg) {
-    const map = T.map.create(cfg.mapEl, { center: [4.5, 10], zoom: 5 });
-    if (!map) return null;
     let location = null;
     let distance = null;
     let routeVersion = 0;
@@ -782,9 +822,26 @@
       if (cfg.panelEl) cfg.panelEl.innerHTML = html;
     };
 
+    /* Le tracé « votre position → port » remplace la carte. */
+    const drawStrip = (from, to) => {
+      if (!cfg.stripEl) return;
+      if (!to) {
+        cfg.stripEl.innerHTML = '';
+        return;
+      }
+      const km = from ? T.geo.haversine(from, to) : NaN;
+      cfg.stripEl.innerHTML = routeStripHtml(
+        from
+          ? { label: from.city || from.name || 'Votre position', sub: 'Votre position de départ', tone: 'me' }
+          : { label: 'Votre position', sub: 'Activez le GPS ou cherchez votre ville', tone: 'idle' },
+        { label: to.city || to.name, sub: to.name || to.country, tone: 'port' },
+        km
+      );
+    };
+
     const idle = () =>
       setPanel(
-        `<div class="distance-idle">${icon('route', 24)}<div><strong>Distance jusqu’au port</strong><p>Activez le GPS ou recherchez votre adresse : l’itinéraire et les kilomètres s’affichent ici.</p></div></div>`
+        `<div class="distance-idle">${icon('route', 24)}<div><strong>Distance jusqu’au port</strong><p>Activez le GPS ou recherchez votre adresse : la distance et les kilomètres s’affichent ici.</p></div></div>`
       );
 
     const locating = () =>
@@ -829,25 +886,23 @@
         idle();
         return;
       }
-      map.setPorts([target], false);
       if (!location) {
-        map.setView(target.lat, target.lng, 9);
+        drawStrip(null, target);
         idle();
         return;
       }
       routing();
-      map.setClient(location.lat, location.lng, location.city || location.name || 'Votre position');
+      drawStrip(location, target);
       try {
         const result = await T.geo.route(location, target);
         if (version !== routeVersion) return;
         distance = result;
-        map.setRoute(result.coords, true);
+        drawStrip(location, target);
         success(result);
       } catch (err) {
         if (version !== routeVersion) return;
         if (String(err.message).includes('no-route')) {
           distance = null;
-          map.setRoute(null);
           noRoute();
         } else {
           const km = T.geo.haversine(location, target);
@@ -860,7 +915,7 @@
             ],
             mode: 'straight',
           };
-          map.setRoute(distance.coords, true);
+          drawStrip(location, target);
           success(distance, true);
         }
       }
@@ -870,21 +925,18 @@
     async function setLocation(loc, label) {
       location = loc;
       if (cfg.inputEl) cfg.inputEl.value = label || loc.displayName || loc.name || '';
-      map.setClient(loc.lat, loc.lng, loc.city || loc.name || 'Votre position');
-      map.fitAll();
       await routeToPort();
     }
 
     async function refresh() {
       const target = cfg.getPort();
       if (!target) {
-        map.setPorts([], false);
+        drawStrip(null, null);
         idle();
         return;
       }
-      map.setPorts([target], false);
       if (!location) {
-        map.setView(target.lat, target.lng, 9);
+        drawStrip(null, target);
         idle();
         return;
       }
@@ -994,12 +1046,10 @@
         }
       });
     }
-    map.invalidate();
     idle();
     refresh();
 
     return {
-      map,
       setLocation,
       refresh,
       routeToPort,
@@ -1135,18 +1185,18 @@
             <div id="roro-summary" class="route-summary-wrap"></div>
           </div>
 
-          <div class="card map-card">
+          <div class="card geo-card">
             <div class="card-head">
               <div>
-                <h2>${icon('map', 20)} GPS &amp; distance jusqu’au port</h2>
-                <p>Utilisez votre position ou saisissez votre ville : l’itinéraire s’affiche sur la carte.</p>
+                <h2>${icon('navigation', 20)} Distance jusqu’au port</h2>
+                <p>Utilisez votre position ou saisissez votre ville : la distance jusqu’au port de chargement s’affiche ci-dessous.</p>
               </div>
             </div>
             <div class="locate-row">
               <input id="roro-address" type="text" placeholder="Votre ville ou adresse (ex. Yaoundé, Cameroun)" autocomplete="street-address" />
               <button id="roro-search" class="btn btn-secondary" type="button">${icon('search', 18)}<span>Rechercher</span></button>
             </div>
-            <div id="roro-map" class="map map-large"></div>
+            <div id="roro-strip" class="strip-wrap"></div>
             <div id="roro-distance" class="distance-panel" aria-live="polite"></div>
             <button id="roro-locate" class="btn btn-locate" type="button">${icon('navigation', 20)}<span>Me localiser</span></button>
           </div>
@@ -1240,7 +1290,7 @@
   function bindRoro() {
     const s = state.roro;
     const widget = createLocationWidget({
-      mapEl: document.getElementById('roro-map'),
+      stripEl: document.getElementById('roro-strip'),
       inputEl: document.getElementById('roro-address'),
       locateBtn: document.getElementById('roro-locate'),
       searchBtn: document.getElementById('roro-search'),
@@ -1426,271 +1476,6 @@
     refreshAll();
   }
 
-  /* ------------------------------ Containers ----------------------------- */
-
-  function initContainerState(params) {
-    const s = {
-      containerId: 'c20',
-      quantity: 1,
-      condition: 'neuf',
-      deliveryCountry: 'Cameroun',
-      deliveryCity: '',
-      usage: '',
-      desiredDate: '',
-      location: null,
-      distance: null,
-    };
-    if (params.container) s.containerId = params.container;
-    if (state.prefillContainer) {
-      const match = state.content.containers.find((c) => c.name === state.prefillContainer.type);
-      s.containerId = match ? match.id : s.containerId;
-      s.condition = state.prefillContainer.condition || s.condition;
-      state.prefillContainer = null;
-    }
-    return s;
-  }
-
-  function containerTargetPort(s) {
-    const countryPorts = state.content.ports.filter((p) => p.country === s.deliveryCountry);
-    if (s.location) {
-      const pool = countryPorts.length ? countryPorts : state.content.ports;
-      return T.geo.nearestPort(s.location.lat, s.location.lng, pool);
-    }
-    return countryPorts[0] || state.content.ports[0];
-  }
-
-  function renderContainers(params) {
-    state.container = initContainerState(params || {});
-    const s = state.container;
-    const containers = state.content.containers;
-    const contact = state.user ? { name: state.user.name, email: state.user.email, phone: state.user.phone } : loadContact();
-    shell(
-      `
-      <section class="page-hero">
-        <div class="container">
-          <p class="eyebrow">Conteneurs · Achat &amp; livraison</p>
-          <h1>Conteneurs neufs<br />et d’occasion</h1>
-          <p class="lead">Choisissez un type de conteneur et demandez votre prix. Aucun paiement en ligne : le prestataire vous répond avec une cotation.</p>
-        </div>
-      </section>
-      <div class="container">
-        <div class="section-head catalog-head">
-          <div>
-            <p class="eyebrow">Catalogue</p>
-            <h2>Nos conteneurs</h2>
-          </div>
-          <span class="catalog-count">${containers.length} type(s) disponible(s)</span>
-        </div>
-        <div class="container-grid catalog-grid">
-          ${containers.map((container) => containerCard(container, false)).join('')}
-        </div>
-
-        <div class="container-form-layout" id="container-form">
-          <form class="card form-card" id="container-form-el" novalidate>
-            <div class="card-head">
-              <div>
-                <h2>${icon('box', 20)} Demande de prix</h2>
-                <p>Remplissez le formulaire : le prestataire vous répond par e-mail ou WhatsApp.</p>
-              </div>
-            </div>
-            ${
-              state.user && state.user.containers && state.user.containers.length
-                ? `<div class="field"><label for="ct-saved">Référence enregistrée</label>
-                    <select id="ct-saved">
-                      <option value="">— Choisir une référence —</option>
-                      ${state.user.containers
-                        .map(
-                          (c) =>
-                            `<option value="${esc(c.id)}">${esc(c.type)}${c.condition ? ` · ${esc(c.condition)}` : ''}</option>`
-                        )
-                        .join('')}
-                    </select>
-                  </div>`
-                : ''
-            }
-            <div class="field-grid two">
-              <div class="field">
-                <label for="ct-type">Type de conteneur</label>
-                <select id="ct-type">
-                  ${containers.map((c) => option(c.id, c.name, s.containerId)).join('')}
-                </select>
-              </div>
-              <div class="field">
-                <label for="ct-quantity">Quantité</label>
-                <input id="ct-quantity" type="number" min="1" max="100" value="1" />
-              </div>
-            </div>
-            <div class="field">
-              <label>État souhaité</label>
-              <div class="segmented">
-                <label class="segmented-item"><input type="radio" name="ct-condition" value="neuf" checked /><span>Neuf</span></label>
-                <label class="segmented-item"><input type="radio" name="ct-condition" value="occasion" /><span>Occasion</span></label>
-              </div>
-            </div>
-            <div class="field-grid two">
-              <div class="field">
-                <label for="ct-country">Pays de livraison</label>
-                <select id="ct-country">${countryOptions(allCountries(), s.deliveryCountry)}</select>
-              </div>
-              <div class="field">
-                <label for="ct-city">Ville / adresse de livraison</label>
-                <input id="ct-city" type="text" placeholder="Douala, Bonabéri…" />
-              </div>
-            </div>
-            <div class="field-grid two">
-              <div class="field"><label for="ct-usage">Usage prévu <span class="label-optional">facultatif</span></label><input id="ct-usage" type="text" placeholder="Stockage, commerce…" /></div>
-              <div class="field"><label for="ct-date">Date souhaitée <span class="label-optional">facultatif</span></label><input id="ct-date" type="date" /></div>
-            </div>
-
-            <div class="card map-card inner-map-card">
-              <div class="card-head">
-                <div>
-                  <h3>${icon('map', 18)} Distance jusqu’au port</h3>
-                  <p>Même outil GPS que pour le Ro-Ro : la distance est jointe à votre demande.</p>
-                </div>
-              </div>
-              <div class="locate-row">
-                <input id="ct-address" type="text" placeholder="Rechercher une ville ou une adresse…" />
-                <button id="ct-search" class="btn btn-secondary" type="button">${icon('search', 18)}<span>Rechercher</span></button>
-              </div>
-              <div id="ct-map" class="map"></div>
-              <div id="ct-distance" class="distance-panel" aria-live="polite"></div>
-              <button id="ct-locate" class="btn btn-locate" type="button">${icon('navigation', 20)}<span>Me localiser</span></button>
-            </div>
-
-            <div class="divider"><span>Coordonnées</span></div>
-            <div class="field-grid two">
-              <div class="field"><label for="ct-name">Nom complet</label><input id="ct-name" type="text" value="${esc(contact.name || '')}" placeholder="Votre nom" /></div>
-              <div class="field"><label for="ct-phone">Téléphone / WhatsApp</label><input id="ct-phone" type="tel" value="${esc(contact.phone || '')}" placeholder="+237 6 00 00 00 00" /></div>
-            </div>
-            <div class="field"><label for="ct-email">E-mail <span class="label-optional">ou téléphone</span></label><input id="ct-email" type="email" value="${esc(contact.email || '')}" placeholder="vous@exemple.com" /></div>
-            <button class="btn btn-primary btn-block btn-lg" type="submit">${icon('check', 20)} Envoyer ma demande de prix</button>
-            <p class="form-hint">${icon('lock', 14)} Aucun compte requis. Un numéro de demande vous sera confirmé.</p>
-          </form>
-        </div>
-      </div>
-      `,
-      { active: 'containers' }
-    );
-    bindContainers();
-  }
-
-  function bindContainers() {
-    const s = state.container;
-    const widget = createLocationWidget({
-      mapEl: document.getElementById('ct-map'),
-      inputEl: document.getElementById('ct-address'),
-      locateBtn: document.getElementById('ct-locate'),
-      searchBtn: document.getElementById('ct-search'),
-      panelEl: document.getElementById('ct-distance'),
-      getPort: () => containerTargetPort(s),
-      onLocation: ({ location, distance }) => {
-        s.location = location;
-        s.distance = distance;
-      },
-    });
-    state.containerWidget = widget;
-
-    $$('[data-select-container]').forEach((button) => {
-      button.addEventListener('click', () => {
-        document.getElementById('ct-type').value = button.dataset.selectContainer;
-        document.getElementById('container-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        toast('Type de conteneur sélectionné.', 'success');
-      });
-    });
-
-    document.getElementById('ct-country').addEventListener('change', async (event) => {
-      s.deliveryCountry = event.target.value;
-      if (widget) await widget.refresh();
-    });
-
-    const savedSelect = document.getElementById('ct-saved');
-    if (savedSelect) {
-      savedSelect.addEventListener('change', () => {
-        const ref = (state.user.containers || []).find((c) => c.id === savedSelect.value);
-        if (!ref) return;
-        const match = state.content.containers.find((c) => c.name === ref.type);
-        if (match) document.getElementById('ct-type').value = match.id;
-        const radio = document.querySelector(`input[name="ct-condition"][value="${ref.condition}"]`);
-        if (radio) radio.checked = true;
-      });
-    }
-
-    document.getElementById('container-form-el').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const button = form.querySelector('[type="submit"]');
-      const container = state.content.containers.find((c) => c.id === document.getElementById('ct-type').value);
-      const condition = (document.querySelector('input[name="ct-condition"]:checked') || {}).value;
-      const addressInput = document.getElementById('ct-address');
-      const cityInput = document.getElementById('ct-city');
-      const contact = {
-        name: document.getElementById('ct-name').value.trim(),
-        phone: document.getElementById('ct-phone').value.trim(),
-        email: document.getElementById('ct-email').value.trim(),
-        city: cityInput.value.trim() || (s.location && s.location.city) || '',
-        country: document.getElementById('ct-country').value,
-      };
-      if (!container) return toast('Sélectionnez un type de conteneur.', 'error');
-      if (!contact.city) return toast('Indiquez la ville de livraison.', 'error');
-      if (!contact.name) return toast('Indiquez votre nom.', 'error');
-      if (!contact.phone && !contact.email) return toast('Indiquez un téléphone ou un e-mail.', 'error');
-
-      setLoading(button, true, 'Envoi…');
-      try {
-        const distanceQuery = addressInput.value.trim() || cityInput.value.trim();
-        const matchesLocation =
-          s.location &&
-          (distanceQuery === s.location.displayName ||
-            distanceQuery === `${s.location.city}, ${s.location.country}` ||
-            distanceQuery === s.location.city);
-        if (distanceQuery && (!s.location || !matchesLocation)) {
-          try {
-            const result = await T.geo.search(distanceQuery);
-            if (result && widget) await widget.setLocation(result, result.displayName);
-          } catch (err) {
-            /* submit without distance */
-          }
-        }
-        const payload = {
-          containerId: container.id,
-          quantity: Math.max(1, Number(document.getElementById('ct-quantity').value) || 1),
-          condition,
-          delivery: {
-            city: contact.city,
-            country: contact.country,
-            address: addressInput.value.trim() || cityInput.value.trim(),
-          },
-          usage: document.getElementById('ct-usage').value.trim(),
-          desiredDate: document.getElementById('ct-date').value,
-        };
-        const distance = s.distance && s.location
-          ? {
-              km: s.distance.km,
-              durationMin: s.distance.durationMin,
-              mode: s.distance.mode,
-              from: { lat: s.location.lat, lng: s.location.lng, name: s.location.name || s.location.city || 'Position' },
-              to: (() => {
-                const target = containerTargetPort(s);
-                return target ? { lat: target.lat, lng: target.lng, name: target.name } : null;
-              })(),
-            }
-          : null;
-        const data = await T.api.post('/api/quotes', { type: 'container', contact, payload, distance });
-        state.lastQuote = data.quote;
-        saveContact(contact);
-        if (state.user) await refreshUser();
-        navigate('#/confirmation');
-      } catch (err) {
-        toast(err.message, 'error');
-      } finally {
-        setLoading(button, false);
-      }
-    });
-
-    if (widget) widget.refresh();
-  }
-
   /* ------------------------------- Services ------------------------------ */
 
   function renderServices() {
@@ -1753,7 +1538,7 @@
           </div>
           <div class="field">
             <label for="sv-details">Détails de votre besoin</label>
-            <textarea id="sv-details" rows="5" placeholder="Décrivez votre besoin : véhicule, conteneur, documents, délais…"></textarea>
+            <textarea id="sv-details" rows="5" placeholder="Décrivez votre besoin : véhicule, marchandise, documents, délais…"></textarea>
           </div>
           <div class="divider"><span>Coordonnées</span></div>
           <div class="field-grid two">
@@ -1854,7 +1639,7 @@
         </div>
       </section>
       `,
-      { active: quote.type === 'roro' ? 'roro' : quote.type === 'container' ? 'containers' : 'services' }
+      { active: quote.type === 'roro' ? 'roro' : 'services' }
     );
     const copyButton = document.getElementById('copy-number');
     if (copyButton) {
@@ -2060,35 +1845,6 @@
             <button class="btn btn-primary btn-sm" type="submit">${icon('plus', 16)} Enregistrer</button>
           </form>
         </div>
-        <div class="panel">
-          <div class="panel-head"><h3>${icon('container', 18)} Mes conteneurs</h3><span class="badge-soft">${(user.containers || []).length}</span></div>
-          ${
-            (user.containers || []).length
-              ? `<div class="reference-list">${(user.containers || [])
-                  .map(
-                    (c) => `<div class="reference-item">
-                      <div><strong>${esc(c.type)}</strong><p>${esc(c.condition || '')}${c.notes ? ` · ${esc(c.notes)}` : ''}</p></div>
-                      <div class="reference-actions">
-                        <button class="btn btn-outline btn-xs" data-use-container="${esc(c.id)}">${icon('container', 13)} Utiliser</button>
-                        <button class="icon-btn btn-icon-danger" data-delete-container="${esc(c.id)}" aria-label="Supprimer">${icon('trash', 16)}</button>
-                      </div>
-                    </div>`
-                  )
-                  .join('')}</div>`
-              : emptyState('container', 'Aucun conteneur', 'Enregistrez un type de conteneur pour pré-remplir vos demandes.')
-          }
-          <form class="reference-form" id="container-ref-form">
-            <h4>Ajouter un conteneur</h4>
-            <div class="field-grid two">
-              <div class="field"><label for="cref-type">Type</label><input id="cref-type" type="text" placeholder="Conteneur 40 pieds" /></div>
-              <div class="field"><label for="cref-condition">État</label>
-                <select id="cref-condition"><option value="neuf">Neuf</option><option value="occasion">Occasion</option></select>
-              </div>
-            </div>
-            <div class="field"><label for="cref-notes">Notes <span class="label-optional">facultatif</span></label><input id="cref-notes" type="text" placeholder="Livraison à Douala…" /></div>
-            <button class="btn btn-primary btn-sm" type="submit">${icon('plus', 16)} Enregistrer</button>
-          </form>
-        </div>
       </div>`;
   }
 
@@ -2117,28 +1873,6 @@
         }
       });
     }
-    const containerForm = document.getElementById('container-ref-form');
-    if (containerForm) {
-      containerForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const button = containerForm.querySelector('[type="submit"]');
-        setLoading(button, true, 'Enregistrement…');
-        try {
-          await T.api.post('/api/account/containers', {
-            type: document.getElementById('cref-type').value.trim(),
-            condition: document.getElementById('cref-condition').value,
-            notes: document.getElementById('cref-notes').value.trim(),
-          });
-          await refreshUser();
-          toast('Conteneur enregistré.', 'success');
-          loadAccountTab();
-        } catch (err) {
-          toast(err.message, 'error');
-        } finally {
-          setLoading(button, false);
-        }
-      });
-    }
     $$('[data-use-vehicle]').forEach((button) => {
       button.addEventListener('click', () => {
         const vehicle = (state.user.vehicles || []).find((v) => v.id === button.dataset.useVehicle);
@@ -2148,30 +1882,12 @@
         navigate('#/roro');
       });
     });
-    $$('[data-use-container]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const ref = (state.user.containers || []).find((c) => c.id === button.dataset.useContainer);
-        if (!ref) return;
-        state.prefillContainer = ref;
-        toast('Référence sélectionnée. Complétez votre demande.', 'success');
-        navigate('#/containers');
-      });
-    });
     $$('[data-delete-vehicle]').forEach((button) => {
       button.addEventListener('click', async () => {
         if (!(await confirmDialog('Supprimer ce véhicule ?', 'Cette référence sera retirée de votre compte.', { confirmLabel: 'Supprimer' }))) return;
         await T.api.del(`/api/account/vehicles/${button.dataset.deleteVehicle}`);
         await refreshUser();
         toast('Véhicule supprimé.', 'success');
-        loadAccountTab();
-      });
-    });
-    $$('[data-delete-container]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        if (!(await confirmDialog('Supprimer ce conteneur ?', 'Cette référence sera retirée de votre compte.', { confirmLabel: 'Supprimer' }))) return;
-        await T.api.del(`/api/account/containers/${button.dataset.deleteContainer}`);
-        await refreshUser();
-        toast('Conteneur supprimé.', 'success');
         loadAccountTab();
       });
     });
@@ -2274,7 +1990,6 @@
     { id: 'quotes', label: 'Cotations', icon: 'inbox' },
     { id: 'departures', label: 'Départs', icon: 'ship' },
     { id: 'ports', label: 'Ports', icon: 'pin' },
-    { id: 'containers', label: 'Conteneurs', icon: 'container' },
     { id: 'slider', label: 'Slider', icon: 'image' },
     { id: 'services', label: 'Services', icon: 'grid' },
     { id: 'users', label: 'Utilisateurs', icon: 'user' },
@@ -2379,11 +2094,6 @@
         const data = await T.api.get('/api/admin/ports');
         root.innerHTML = adminPortsHtml(data.ports);
         bindAdminPorts();
-      } else if (state.adminSection === 'containers') {
-        const data = await T.api.get('/api/admin/containers');
-        state.adminData = { ...(state.adminData || {}), containers: data.containers };
-        root.innerHTML = adminContainersHtml(data.containers);
-        bindAdminContainers();
       } else if (state.adminSection === 'slider') {
         const data = await T.api.get('/api/admin/sliders');
         state.adminData = { ...(state.adminData || {}), sliders: data.sliders };
@@ -2420,7 +2130,7 @@
         <div class="stat-card">
           <span class="stat-icon stat-amber">${icon('clock', 22)}</span>
           <div><strong>${stats.quotes.received}</strong><span>À traiter</span></div>
-          <small>${stats.quotes.processing} en cours</small>
+          <small>${stats.quotes.byStatus.processing || 0} en cours</small>
         </div>
         <div class="stat-card">
           <span class="stat-icon stat-teal">${icon('ship', 22)}</span>
@@ -2430,7 +2140,7 @@
         <div class="stat-card">
           <span class="stat-icon stat-violet">${icon('user', 22)}</span>
           <div><strong>${stats.users.clients}</strong><span>Clients</span></div>
-          <small>${stats.containers} conteneurs</small>
+          <small>${stats.users.total} comptes</small>
         </div>
       </div>
       <div class="admin-grid">
@@ -2493,7 +2203,7 @@
       <div class="filters">
         <select id="f-type">
           <option value="">Tous les onglets</option>
-          ${['roro', 'container', 'service'].map((type) => option(type, QUOTE_TYPE[type].label, f.type)).join('')}
+          ${['roro', 'service'].map((type) => option(type, QUOTE_TYPE[type].label, f.type)).join('')}
         </select>
         <select id="f-status">
           <option value="">Tous les statuts</option>
@@ -2927,60 +2637,6 @@
     });
   }
 
-  function adminContainersHtml(containers) {
-    return `<div class="panel">
-      <div class="panel-head">
-        <div><h2>Conteneurs</h2><p>${containers.length} type(s) au catalogue</p></div>
-        <button class="btn btn-primary btn-sm" id="add-container" type="button">${icon('plus', 16)} Nouveau type</button>
-      </div>
-      <div class="admin-container-grid">
-        ${containers
-          .map(
-            (c) => `<div class="admin-container-card">
-              <div class="admin-container-img"><img src="${esc(c.image)}" alt="${esc(c.name)}" loading="lazy" /></div>
-              <div class="admin-container-body">
-                <div class="admin-container-title"><h3>${esc(c.name)}</h3>${c.active ? '<span class="status-pill status-open"><span class="dot"></span>Actif</span>' : '<span class="status-pill status-departed"><span class="dot"></span>Inactif</span>'}</div>
-                <p>${esc(c.description)}</p>
-                <dl class="specs">
-                  <div><dt>Dimensions</dt><dd>${esc(c.dimensions)}</dd></div>
-                  <div><dt>Volume</dt><dd>${esc(c.volume)}</dd></div>
-                </dl>
-                <div class="row-actions">
-                  <button class="btn btn-outline btn-xs" data-edit-container="${esc(c.id)}">${icon('edit', 14)} Modifier</button>
-                  <button class="icon-btn btn-icon-danger" data-delete-container="${esc(c.id)}" aria-label="Supprimer">${icon('trash', 16)}</button>
-                </div>
-              </div>
-            </div>`
-          )
-          .join('')}
-      </div>
-    </div>`;
-  }
-
-  function bindAdminContainers() {
-    document.getElementById('add-container').addEventListener('click', () => containerForm(null));
-    $$('[data-edit-container]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const pool = (state.adminData && state.adminData.containers) || state.content.containers;
-        const container = pool.find((c) => c.id === btn.dataset.editContainer);
-        containerForm(container);
-      });
-    });
-    $$('[data-delete-container]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        if (!(await confirmDialog('Supprimer ce type de conteneur ?', 'Il disparaîtra du catalogue public.', { confirmLabel: 'Supprimer' }))) return;
-        try {
-          await T.api.del(`/api/admin/containers/${btn.dataset.deleteContainer}`);
-          toast('Conteneur supprimé.', 'success');
-          await refreshContent();
-          loadAdminSection();
-        } catch (err) {
-          toast(err.message, 'error');
-        }
-      });
-    });
-  }
-
   function compressImage(file, maxWidth = 1600, maxHeight = 1200, quality = 0.82) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
@@ -3027,74 +2683,6 @@
     }
     const data = await T.api.post('/api/admin/upload', { dataUrl });
     return data.url;
-  }
-
-  function containerForm(container) {
-    const body = `<form id="container-form" class="form">
-      <div class="field"><label for="ctf-name">Nom</label><input id="ctf-name" required value="${esc(container ? container.name : '')}" placeholder="Conteneur 20 pieds" /></div>
-      <div class="field-grid two">
-        <div class="field"><label for="ctf-short">Nom court</label><input id="ctf-short" value="${esc(container ? container.shortName : '')}" placeholder="20 ft" /></div>
-        <div class="field"><label for="ctf-volume">Volume</label><input id="ctf-volume" value="${esc(container ? container.volume : '')}" placeholder="33,2 m³" /></div>
-      </div>
-      <div class="field"><label for="ctf-dimensions">Dimensions</label><input id="ctf-dimensions" value="${esc(container ? container.dimensions : '')}" placeholder="6,06 × 2,44 × 2,59 m" /></div>
-      <div class="field"><label for="ctf-description">Description</label><textarea id="ctf-description" rows="3">${esc(container ? container.description : '')}</textarea></div>
-      <div class="field"><label for="ctf-image">Photo</label>
-        <div class="upload-row">
-          <input id="ctf-image" type="text" value="${esc(container ? container.image : '')}" placeholder="/img/containers/20ft.jpg" />
-          <label class="btn btn-outline btn-sm upload-btn" for="ctf-file">${icon('upload', 15)} Importer</label>
-          <input id="ctf-file" type="file" accept="image/*" hidden />
-        </div>
-        <img id="ctf-preview" class="img-preview ${container && container.image ? '' : 'hidden'}" src="${esc(container ? container.image : '')}" alt="" />
-      </div>
-    </form>`;
-    modal({
-      title: container ? 'Modifier le conteneur' : 'Nouveau type de conteneur',
-      body,
-      footer: `<button class="btn btn-ghost" type="button" data-cancel>Annuler</button><button class="btn btn-primary" type="button" data-save>${icon('save', 17)} Enregistrer</button>`,
-      onOpen: (modalEl, close) => {
-        modalEl.querySelector('[data-cancel]').addEventListener('click', close);
-        const fileInput = modalEl.querySelector('#ctf-file');
-        const imageInput = modalEl.querySelector('#ctf-image');
-        const preview = modalEl.querySelector('#ctf-preview');
-        fileInput.addEventListener('change', () => {
-          const file = fileInput.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            preview.src = reader.result;
-            preview.classList.remove('hidden');
-          };
-          reader.readAsDataURL(file);
-        });
-        modalEl.querySelector('[data-save]').addEventListener('click', async () => {
-          const button = modalEl.querySelector('[data-save]');
-          setLoading(button, true, 'Enregistrement…');
-          try {
-            let image = imageInput.value.trim();
-            if (fileInput.files[0]) image = await uploadImage(fileInput.files[0]);
-            const payload = {
-              name: document.getElementById('ctf-name').value.trim(),
-              shortName: document.getElementById('ctf-short').value.trim(),
-              volume: document.getElementById('ctf-volume').value.trim(),
-              dimensions: document.getElementById('ctf-dimensions').value.trim(),
-              description: document.getElementById('ctf-description').value.trim(),
-              image: image || '/img/containers/20ft.jpg',
-              active: true,
-            };
-            if (container) await T.api.put(`/api/admin/containers/${container.id}`, payload);
-            else await T.api.post('/api/admin/containers', payload);
-            close();
-            toast('Conteneur enregistré.', 'success');
-            await refreshContent();
-            loadAdminSection();
-          } catch (err) {
-            toast(err.message, 'error');
-          } finally {
-            setLoading(button, false);
-          }
-        });
-      },
-    });
   }
 
   function adminSlidersHtml(sliders) {
@@ -3457,7 +3045,6 @@
     if (!state.user && !state.visitor) return renderLogin();
     if (path === 'home' || path === '') return renderHome();
     if (path === 'roro') return renderRoro(params);
-    if (path === 'containers') return renderContainers(params);
     if (path === 'services') return renderServices();
     if (path.startsWith('service/')) return renderServiceQuote(path.split('/')[1]);
     if (path === 'account') return renderAccount();

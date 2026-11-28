@@ -95,7 +95,7 @@ async function main() {
   if (adoc.querySelectorAll('.stat-card').length !== 4) throw new Error('Statistiques admin incomplètes');
   log('✓ Tableau de bord admin rendu');
 
-  const sections = ['quotes', 'departures', 'ports', 'containers', 'slider', 'services', 'users', 'notifications', 'dashboard'];
+  const sections = ['quotes', 'departures', 'ports', 'slider', 'services', 'users', 'notifications', 'dashboard'];
   for (const section of sections) {
     awindow.location.hash = `#/admin/${section}`;
     await wait(900);

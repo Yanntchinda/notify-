@@ -10,8 +10,8 @@
     {
       "id": "slide2",
       "src": "/img/slider/slide2.jpg",
-      "caption": "Conteneurs neufs et d’occasion",
-      "sub": "Achat et livraison, sur simple demande de prix",
+      "caption": "Vos véhicules chargés au port",
+      "sub": "Voitures, 4x4, utilitaires et engins — navires Ro-Ro réguliers",
       "order": 2
     },
     {
@@ -25,7 +25,7 @@
       "id": "slide4",
       "src": "/img/slider/slide4.jpg",
       "caption": "De votre ville au port",
-      "sub": "Distance et itinéraire calculés automatiquement",
+      "sub": "Distance jusqu’au port calculée automatiquement",
       "order": 4
     },
     {
@@ -111,7 +111,7 @@
       "departureDate": "2027-01-23",
       "depositDeadline": "2027-01-18",
       "status": "open",
-      "note": "Véhicules et conteneurs",
+      "note": "Véhicules et matériel roulant",
       "createdAt": "2026-11-01T09:00:00.000Z"
     },
     {
@@ -135,28 +135,6 @@
       "status": "open",
       "note": "Véhicules et engins",
       "createdAt": "2026-11-01T09:00:00.000Z"
-    },
-    {
-      "id": "dep_98edc95060c60cfc",
-      "ship": "MV UI Test",
-      "fromPortId": "port_douala",
-      "toPortId": "port_antwerp",
-      "departureDate": "2027-04-01",
-      "depositDeadline": "2027-03-27",
-      "status": "open",
-      "note": "",
-      "createdAt": "2026-11-23T12:06:54.058Z"
-    },
-    {
-      "id": "dep_ad5b3b0c3e422041",
-      "ship": "MV UI Test",
-      "fromPortId": "port_douala",
-      "toPortId": "port_antwerp",
-      "departureDate": "2027-04-01",
-      "depositDeadline": "2027-03-27",
-      "status": "open",
-      "note": "",
-      "createdAt": "2026-11-23T12:12:15.664Z"
     }
   ],
   "ports": [
@@ -435,7 +413,7 @@
       "id": "svc_routier",
       "name": "Transport routier",
       "icon": "🚛",
-      "description": "Enlèvement de votre véhicule ou conteneur et acheminement jusqu’au port, partout en Afrique de l’Ouest et du Centre.",
+      "description": "Enlèvement de votre véhicule et acheminement jusqu’au port, partout en Afrique de l’Ouest et du Centre.",
       "active": true
     },
     {

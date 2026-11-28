@@ -100,34 +100,6 @@ async function main() {
   console.log('✓ Demande Ro-Ro avec distance confirmée :', vdoc.querySelector('.quote-ref strong').textContent.trim());
   vwindow.close();
 
-  /* ----------------------------- Conteneur avec distance ----------------------------- */
-  const ctDom = await createDom();
-  const cwindow = ctDom.window;
-  const cdoc = cwindow.document;
-  await wait(1800);
-  cdoc.getElementById('btn-visitor').click();
-  await wait(500);
-  cwindow.location.hash = '#/containers';
-  await wait(900);
-  cdoc.getElementById('ct-type').value = 'c40';
-  cdoc.getElementById('ct-quantity').value = '2';
-  cdoc.querySelector('input[name="ct-condition"][value="occasion"]').checked = true;
-  cdoc.getElementById('ct-country').value = 'Cameroun';
-  cdoc.getElementById('ct-city').value = 'Douala';
-  cdoc.getElementById('ct-name').value = 'Client Conteneur';
-  cdoc.getElementById('ct-phone').value = '+237699000222';
-  cdoc.getElementById('ct-email').value = 'container.ui@example.cm';
-  cdoc.getElementById('ct-address').value = 'Douala, Cameroun';
-  cdoc.getElementById('ct-search').click();
-  await wait(1200);
-  const ctDistance = cdoc.getElementById('ct-distance').textContent;
-  if (!/247/.test(ctDistance)) throw new Error(`Distance conteneur non affichée : ${ctDistance}`);
-  cdoc.getElementById('container-form-el').dispatchEvent(new cwindow.Event('submit', { bubbles: true, cancelable: true }));
-  await wait(2500);
-  if (!cdoc.querySelector('.confirm-card')) throw new Error('Confirmation conteneur absente');
-  console.log('✓ Demande conteneur confirmée :', cdoc.querySelector('.quote-ref strong').textContent.trim());
-  cwindow.close();
-
   /* ------------------------------- Admin : réponse ------------------------------- */
   const adminDom = await createDom();
   const awindow = adminDom.window;

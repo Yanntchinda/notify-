@@ -50,9 +50,9 @@ async function main() {
   }
 
   await go('#/roro', 'Ro-Ro');
-  console.log('Roro form:', !!window.document.getElementById('roro-form'), 'map:', !!window.document.getElementById('roro-map'));
-  await go('#/containers', 'Conteneurs');
-  console.log('Container cards:', window.document.querySelectorAll('.container-card').length, 'form:', !!window.document.getElementById('container-form-el'));
+  console.log('Roro form:', !!window.document.getElementById('roro-form'), 'strip:', !!window.document.getElementById('roro-strip'));
+  await go('#/containers', 'Conteneurs (supprimés -> accueil)');
+  console.log('Carte absente:', !window.document.getElementById('roro-map'), '| couloir sur l’accueil:', !!window.document.getElementById('home-corridor'));
   await go('#/services', 'Services');
   await go('#/service/svc_dedouanement', 'Service quote');
   await go('#/account', 'Account');

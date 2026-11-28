@@ -40,7 +40,7 @@ function buildSeed() {
     { id: 'dep_seme', ship: 'MV Seme Express', fromPortId: 'port_cotonou', toPortId: 'port_marseille', departureDate: '2026-12-19', depositDeadline: '2026-12-15', status: 'open', note: 'Véhicules et machinerie' },
     { id: 'dep_abidjan', ship: 'MV Abidjan Bridge', fromPortId: 'port_abidjan', toPortId: 'port_hamburg', departureDate: '2026-12-27', depositDeadline: '2026-12-22', status: 'full', note: 'Complet — liste d’attente' },
     { id: 'dep_kribi', ship: 'MV Kribi Star', fromPortId: 'port_douala', toPortId: 'port_lehavre', departureDate: '2027-01-09', depositDeadline: '2027-01-05', status: 'open', note: 'Ro-Ro classique' },
-    { id: 'dep_ocean', ship: 'MV Ocean Pride', fromPortId: 'port_douala', toPortId: 'port_jebelali', departureDate: '2027-01-23', depositDeadline: '2027-01-18', status: 'open', note: 'Véhicules et conteneurs' },
+    { id: 'dep_ocean', ship: 'MV Ocean Pride', fromPortId: 'port_douala', toPortId: 'port_jebelali', departureDate: '2027-01-23', depositDeadline: '2027-01-18', status: 'open', note: 'Véhicules et matériel roulant' },
     { id: 'dep_tema', ship: 'MV Tema Glory', fromPortId: 'port_tema', toPortId: 'port_shanghai', departureDate: '2027-02-06', depositDeadline: '2027-02-01', status: 'open', note: 'Fret et véhicules' },
     { id: 'dep_lome', ship: 'MV Lomé Mercury', fromPortId: 'port_lome', toPortId: 'port_rotterdam', departureDate: '2027-02-20', depositDeadline: '2027-02-15', status: 'open', note: 'Véhicules et engins' },
     { id: 'dep_matadi', ship: 'MV Matadi Explorer', fromPortId: 'port_matadi', toPortId: 'port_marseille', departureDate: '2026-11-15', depositDeadline: '2026-11-11', status: 'departed', note: 'Départ effectué' },
@@ -81,16 +81,16 @@ function buildSeed() {
 
   const services = [
     { id: 'svc_dedouanement', name: 'Dédouanement & transit', icon: '🛃', description: 'Prise en charge des formalités douanières à l’import comme à l’export : documents, déclarations, suivi.', active: true },
-    { id: 'svc_routier', name: 'Transport routier', icon: '🚛', description: 'Enlèvement de votre véhicule ou conteneur et acheminement jusqu’au port, partout en Afrique de l’Ouest et du Centre.', active: true },
+    { id: 'svc_routier', name: 'Transport routier', icon: '🚛', description: 'Enlèvement de votre véhicule et acheminement jusqu’au port, partout en Afrique de l’Ouest et du Centre.', active: true },
     { id: 'svc_assurance', name: 'Assurance cargo', icon: '🛡️', description: 'Assurance ad valorem pour vos véhicules et marchandises, de la prise en charge jusqu’à la livraison.', active: true },
     { id: 'svc_groupage', name: 'Groupage & consolidation', icon: '📦', description: 'Regroupement de plusieurs expéditions pour réduire les coûts et optimiser le remplissage.', active: true },
   ];
 
   const sliders = [
     { id: 'slide1', src: '/img/slider/slide1.jpg', caption: 'Votre véhicule, pris en charge jusqu’au port', sub: 'Ro-Ro régulier vers l’Europe, l’Asie et les Amériques', order: 1 },
-    { id: 'slide2', src: '/img/slider/slide2.jpg', caption: 'Conteneurs neufs et d’occasion', sub: 'Achat et livraison, sur simple demande de prix', order: 2 },
+    { id: 'slide2', src: '/img/slider/slide2.jpg', caption: 'Vos véhicules chargés au port', sub: 'Voitures, 4x4, utilitaires et engins — navires Ro-Ro réguliers', order: 2 },
     { id: 'slide3', src: '/img/slider/slide3.jpg', caption: 'Des départs réguliers', sub: 'Consultez les prochaines traversées et réservez votre place', order: 3 },
-    { id: 'slide4', src: '/img/slider/slide4.jpg', caption: 'De votre ville au port', sub: 'Distance et itinéraire calculés automatiquement', order: 4 },
+    { id: 'slide4', src: '/img/slider/slide4.jpg', caption: 'De votre ville au port', sub: 'Distance jusqu’au port calculée automatiquement', order: 4 },
     { id: 'slide5', src: '/img/slider/slide5.jpg', caption: 'Un accompagnement de bout en bout', sub: 'Dédouanement, transport routier et assurance cargo', order: 5 },
   ];
 

@@ -1,22 +1,18 @@
 'use strict';
 
 /* Service worker minimal : coquille hors ligne, API toujours en réseau. */
-const CACHE = 'transit-shell-v3';
+const CACHE = 'transit-shell-v4';
 const SHELL = [
   '/',
   '/index.html',
   '/css/styles.css',
   '/js/api.js',
   '/js/ui.js',
-  '/js/map.js',
+  '/js/geo.js',
   '/js/app.js',
-  '/vendor/leaflet/leaflet.css',
-  '/vendor/leaflet/leaflet.js',
-  '/vendor/topojson/topojson-client.min.js',
-  '/data/basemap-land.json',
-  '/data/basemap-countries.json',
   '/data/cities.json',
   '/data/gazetteer.json',
+  '/data/demo-content.json',
   '/img/icon.svg',
   '/manifest.webmanifest',
 ];

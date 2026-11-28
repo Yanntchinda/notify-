@@ -1,12 +1,11 @@
-# Transit — application de cotation Ro-Ro & conteneurs
+# Transit — application de cotation Ro-Ro
 
 Application web mobile-first permettant à un client de demander une cotation pour :
 
 - le transport Ro-Ro de son véhicule, depuis sa ville jusqu'au pays de destination ;
-- l'achat d'un conteneur (neuf ou d'occasion), avec livraison ;
 - un service complémentaire (dédouanement, transport routier, assurance cargo, groupage).
 
-Aucun compte n'est obligatoire : le visiteur peut envoyer une demande dans chaque onglet. Le compte client sert uniquement à conserver ses références et à suivre ses demandes. L'espace administrateur permet de piloter les départs, les ports, le slider, les conteneurs, les services, les cotations et les utilisateurs.
+Aucun compte n'est obligatoire : le visiteur peut envoyer une demande dans chaque onglet. Le compte client sert uniquement à conserver ses références et à suivre ses demandes. L'espace administrateur permet de piloter les départs, les ports, le slider, les services, les cotations et les utilisateurs.
 
 ---
 
@@ -45,12 +44,11 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 ### Parcours visiteur
 
 - **Page de connexion** avec choix « Se connecter / Créer un compte / Mot de passe oublié » et bouton **Continuer en visiteur**.
-- **Accueil** : slider de 5 images (défilement automatique toutes les 5 s, pause au survol/toucher, flèches, indicateurs), prochains départs Ro-Ro en tête, carte pays de départ / pays d'arrivée, catalogue conteneurs et services.
-- **Ro-Ro** : choix d'un départ ou d'un trajet, carte Leaflet, bouton **Me localiser**, recherche manuelle d'adresse, itinéraire routier et distance en km jusqu'au port, formulaire véhicule et coordonnées.
-- **Conteneurs** : catalogue avec photos et caractéristiques, formulaire de prix (type, quantité, neuf/occasion, ville et pays de livraison, usage, date souhaitée), même outil carte/GPS pour la distance jusqu'au port.
+- **Accueil** : slider de 5 images (défilement automatique toutes les 5 s, pause au survol/toucher, flèches, indicateurs), prochains départs Ro-Ro en tête, **couloir maritime** pays de départ / pays d'arrivée (distance de route, durée de traversée, ports actifs, prochain départ) et services.
+- **Ro-Ro** : choix d'un départ ou d'un trajet, bouton **Me localiser**, recherche manuelle d'adresse, itinéraire routier et distance en km jusqu'au port (tracé « votre ville → port », sans carte), formulaire véhicule et coordonnées.
 - **Autres services** : 4 services avec page de cotation dédiée.
 - **Confirmation** : numéro de demande généré (`RR-2026-0001`, `CT-2026-0001`, `SV-2026-0001`), récapitulatif, copie du numéro, lien WhatsApp de confirmation.
-- **Compte client** : historique des demandes et statuts, références véhicules/conteneurs réutilisables, profil, mot de passe, langue. Les demandes envoyées en visiteur avec le même e-mail ou téléphone sont rattachées automatiquement à la création du compte.
+- **Compte client** : historique des demandes et statuts, références véhicules réutilisables, profil, mot de passe, langue. Les demandes envoyées en visiteur avec le même e-mail ou téléphone sont rattachées automatiquement à la création du compte.
 
 ### Espace administrateur
 
@@ -58,7 +56,6 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 - **Cotations** : filtres par onglet, statut, recherche (numéro, nom, e-mail, téléphone) et dates ; détail complet ; réponse avec prix et message ; changement de statut.
 - **Départs Ro-Ro** : création, modification, suppression, statuts ouvert / complet / parti.
 - **Ports** : nom, pays, rôle (chargement / déchargement / les deux), coordonnées GPS exactes.
-- **Conteneurs** : types, photos (upload compressé), descriptions, dimensions, volume.
 - **Slider** : ajouter, remplacer, réordonner, supprimer (contrainte de 5 à 6 images).
 - **Services** : gestion des services complémentaires.
 - **Utilisateurs** : consultation, activation/désactivation, changement de rôle, suppression des comptes clients.
@@ -74,37 +71,29 @@ La page de connexion propose aussi des boutons « Admin » et « Client » pour 
 | Persistance | **Supabase (PostgreSQL)** — base, authentification et stockage managés, sans serveur. En local, un fichier JSON (`data/db.json`) reste disponible pour le développement. |
 | Authentification | Supabase Auth (sessions JWT, mots de passe hachés par le service) |
 | Frontend | HTML/CSS/JavaScript vanilla, SPA par hash routing |
-| Carte | Leaflet + **plan embarqué** (Natural Earth) + plan détaillé gratuit automatiquement sélectionné parmi 7 fournisseurs (OpenStreetMap, OSM France, OSM Allemagne, OpenTopoMap, CARTO Voyager, Esri World Street Map, Wikimedia) + imagerie Esri |
+| Trajet | Couloirs maritimes dessinés en SVG à partir des coordonnées GPS des ports — aucune carte, aucune tuile, aucun fond de plan à charger |
 | Géocodage | Nominatim (OpenStreetMap) |
 | Itinéraire | OSRM Public Demo Server (`router.project-osrm.org`) |
 | E-mails | Nodemailer (facultatif, via SMTP) |
 | PWA | Manifest + service worker (installation possible) |
 
-### Pourquoi Leaflet / OpenStreetMap ?
+### Pourquoi plus aucune carte ?
 
-Le cahier des charges proposait Google Maps Platform (payant à l'usage) ou Leaflet + OpenStreetMap + service d'itinéraire libre. Le choix libre a été retenu pour le prototype : aucune clé API, aucun coût, et les mêmes fonctionnalités (carte, marqueurs, polyline, géocodage, distance routière). En production, il est recommandé d'héberger son propre serveur OSRM ou d'utiliser un fournisseur avec SLA, car les serveurs publics de démonstration sont limités.
+L'application n'affiche **aucune carte**. Les fonds de plan (tuiles OpenStreetMap, CARTO, Esri…) étaient bloqués sur le réseau de plusieurs utilisateurs — erreurs 403, iframes d'aperçu, connexions mobiles filtrées — et ils font appel à des serveurs extérieurs à chaque affichage. À la place, tout est **calculé à partir des coordonnées GPS des ports** :
 
-### Plan embarqué et plan de rues
+- **Accueil — couloir maritime** : le pays de départ et le pays d'arrivée choisis, l'application dessine le trajet en SVG (port A, arc animé, port B) et affiche la distance de route estimée, la durée de traversée à 15 nœuds, le nombre de ports actifs, le nombre de départs ouverts et la date du prochain départ.
+- **Formulaires — tracé « votre ville → port »** : même principe, en une ligne, avec les kilomètres entre la position du client et le port de chargement.
+- **Aucune dépendance extérieure** : ni Leaflet, ni tuiles, ni clé API. Le tracé fonctionne hors ligne, sur tous les réseaux, et pèse quelques kilo-octets dans l'APK.
 
-Toutes les cartes (accueil, Ro-Ro, conteneurs, administration des ports) affichent d'abord un **plan embarqué** : les continents, les frontières des 177 pays **avec leurs noms en français**, 47 villes et leurs libellés sont servis par l'application elle-même (`public/data/`, données Natural Earth du domaine public, 163 Ko). La carte s'affiche donc **même sans accès aux serveurs de tuiles**, et instantanément.
-
-Par-dessus, l'application cherche **le premier plan détaillé réellement joignable** parmi sept fournisseurs gratuits : OpenStreetMap, OSM France, OSM Allemagne, OpenTopoMap, CARTO Voyager, Esri World Street Map et Wikimedia Maps — plus l'imagerie satellite Esri. Chaque fournisseur est testé par **une seule tuile-sonde** ; le premier qui répond est retenu. Si un réseau bloque OpenStreetMap mais pas CARTO (ou l'inverse), la carte détaillée s'affiche quand même.
-
-**Diagnostic intégré** : si aucun serveur ne répond, le lien « Détails » du badge ouvre la liste de tous les fournisseurs testés avec leur état (Accessible / Bloqué). C'est le rapport à transmettre à l'administrateur réseau pour faire autoriser le bon domaine.
-
-- **Sélecteur de fond** en haut à droite de chaque carte : « Plan embarqué », « Plan de rues », « Satellite ». Le choix est mémorisé sur l'appareil et repris sur toutes les pages.
-- **Aucune erreur 403** : dans un aperçu intégré (iframe) ou après un premier échec, l'application ne tente plus aucun chargement de tuiles. Avant d'activer un fond détaillé, une **sonde unique** vérifie qu'une tuile est réellement accessible ; si elle échoue, aucun autre appel n'est émis.
-- **Secours automatique** : si le fournisseur ne répond pas (tuiles en erreur, réseau bloqué, timeout de 12 s), le fond bascule sur le fournisseur suivant puis sur le plan embarqué ; un badge en bas à gauche indique le plan réellement affiché.
-- **Aucun fournisseur joignable** : la carte reste utilisable grâce au plan embarqué ; le badge indique « Plan simplifié · hors ligne » et un lien **Réessayer** relance le chargement (ou automatiquement au retour du réseau).
+Seuls les services de **distance** restent externes, et ils sont facultatifs : Nominatim pour trouver une adresse, OSRM pour l'itinéraire routier. Au premier échec, l'application bascule sur le répertoire de villes embarqué et la distance à vol d'oiseau — le formulaire reste utilisable de bout en bout.
 
 ### Recherche de ville et distance sans réseau
 
-Quand Nominatim ou OSRM ne répondent pas (réseau bloqué, connexion lente), l'application bascule sur un **répertoire local** de 4 100 villes (`public/data/gazetteer.json`, 219 Ko, données GeoNames) enrichi des villes du plan embarqué : « Douala », « Yaoundé », « Anvers, Belgique » sont reconnus en français. La distance est alors calculée **à vol d'oiseau** et signalée comme telle (« Itinéraire détaillé indisponible : distance estimée à vol d'oiseau »). Dès que le réseau revient, l'itinéraire routier détaillé et le temps de trajet remplacent l'estimation.
+Quand Nominatim ou OSRM ne répondent pas (réseau bloqué, connexion lente), l'application bascule sur un **répertoire local** de 4 100 villes (`public/data/gazetteer.json`, 219 Ko, données GeoNames) enrichi de 47 villes supplémentaires (`public/data/cities.json`) : « Douala », « Yaoundé », « Anvers, Belgique » sont reconnus en français. La distance est alors calculée **à vol d'oiseau** et signalée comme telle (« Itinéraire détaillé indisponible : distance estimée à vol d'oiseau »). Dès que le réseau revient, l'itinéraire routier détaillé et le temps de trajet remplacent l'estimation.
 
 ### Géolocalisation bloquée
 
 Certains navigateurs intègrent l'application dans un cadre qui interdit la géolocalisation. L'application détecte ce cas **avant** de demander la permission : au lieu d'un refus, elle affiche « Saisissez votre ville » et place le curseur dans le champ de recherche. La distance se calcule ensuite exactement de la même façon.
-- Aucune clé d'API : seules les attributions sont affichées en bas de carte.
 
 ---
 
@@ -141,19 +130,16 @@ public/
   css/styles.css  Design mobile-first
   js/api.js       Client HTTP
   js/ui.js        Composants, icônes, statuts, modales, toasts
-  js/map.js       Leaflet, plan embarqué, géocodage, itinéraire, distance
+  js/geo.js       Géocodage, recherche de ville, itinéraire, distance jusqu'au port
   js/app.js       Routes, pages publiques, compte client, administration
-  data/           Plan embarqué Natural Earth (continents, pays, villes) + répertoire de villes
-  img/            Visuels du slider, conteneurs, icônes PWA
-  vendor/leaflet/ Leaflet servi localement
-  vendor/topojson/  Décodeur TopoJSON du plan embarqué
+  data/           Répertoires de villes (gazetteer, cities) et contenu de démonstration
+  img/            Visuels du slider, icônes PWA
   sw.js           Service worker
 scripts/
   api-test.js     Test d'intégration API
   e2e-ui.js       Test de bout en bout (jsdom, GPS simulé)
   smoke-test.js   Test de chargement des pages
   backup.js       Sauvegarde horodatée de la base
-  build-basemap.js  Régénère public/data/ depuis world-atlas
   generate_icons.py  Génération des icônes PWA
 data/db.json      Base de démonstration (ignorée par Git)
 ```
@@ -187,19 +173,17 @@ Le cahier des charges listait plusieurs points à valider avant le développemen
 
 | Point | Choix retenu | À confirmer |
 |---|---|---|
-| « Références » | Véhicules : marque, modèle, châssis (VIN), type, année. Conteneurs : type, état, notes. | Ajouter d'autres champs (cylindrée, couleur, numéro de plaque…) ? |
+| « Références » | Véhicules : marque, modèle, châssis (VIN), type, année. | Ajouter d'autres champs (cylindrée, couleur, numéro de plaque…) ? |
 | Onglets supplémentaires | 4 services : Dédouanement & transit, Transport routier, Assurance cargo, Groupage & consolidation | Noms et contenu exacts |
-| Carte | Leaflet + OpenStreetMap + Nominatim + OSRM (libre) | Google Maps si un SLA et un budget sont confirmés |
+| Carte | Aucune carte : couloirs maritimes en SVG + distance Nominatim/OSRM | Réintroduire une carte si un fournisseur fiable avec SLA est choisi |
 | Canal de réponse | E-mail (SMTP) + WhatsApp (lien), notifications in-app | Canal prioritaire |
 | Langues | Interface en français ; préférence anglais enregistrée mais interface non traduite | Traduction anglaise |
 | Devises | Prix saisi librement par l'administrateur (FCFA, EUR…) | Devises et règles d'affichage |
 | Paiement | Aucun paiement en ligne : simple demande de prix | — |
 
-### Prérequis réseau de la carte
+### Prérequis réseau
 
-Les tuiles sont chargées **par le navigateur du visiteur**, pas par le serveur : c'est donc le réseau du visiteur qui doit pouvoir joindre au moins un serveur de cartes. L'application en teste sept (OpenStreetMap, OSM France, OSM Allemagne, OpenTopoMap, CARTO, Esri, Wikimedia) et retient le premier joignable ; sinon elle affiche le plan embarqué et un diagnostic (« Détails » dans le badge).
-
-Sur un réseau d'entreprise, un campus ou un pays qui filtre ces domaines, deux options : faire autoriser au moins un des domaines par l'administrateur, ou servir les tuiles depuis votre propre domaine (fournisseur avec clé, ou serveur de tuiles auto-hébergé) en changeant l'URL dans `STREET_PROVIDERS` (`public/js/map.js`).
+Aucun. Les tracés sont dessinés par l'application à partir des coordonnées GPS déjà stockées dans la base : aucune tuile, aucun domaine de cartographie à autoriser. Seuls la recherche d'adresse (Nominatim) et l'itinéraire routier (OSRM) sortent du navigateur, et leur échec est prévu : l'application bascule sur son répertoire de villes local et la distance à vol d'oiseau.
 
 ### Version Android (APK)
 

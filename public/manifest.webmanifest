@@ -1,7 +1,7 @@
 {
-  "name": "Transit — Ro-Ro & conteneurs",
+  "name": "Transit — Ro-Ro & services",
   "short_name": "Transit",
-  "description": "Cotation Ro-Ro et conteneurs, GPS et distance jusqu’au port.",
+  "description": "Cotation Ro-Ro, couloirs maritimes et distance jusqu’au port.",
   "lang": "fr",
   "start_url": "/",
   "scope": "/",
